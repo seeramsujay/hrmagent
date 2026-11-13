@@ -1,0 +1,1196 @@
+{
+  "node2_only": {
+    "solved": 1,
+    "total": 5,
+    "traces": [
+      {
+        "problem_id": "SYNTH-101",
+        "solved": true
+      },
+      {
+        "problem_id": "SYNTH-201",
+        "solved": false
+      },
+      {
+        "problem_id": "SYNTH-301",
+        "solved": false
+      },
+      {
+        "problem_id": "SYNTH-401",
+        "solved": false
+      },
+      {
+        "problem_id": "SYNTH-501",
+        "solved": false
+      }
+    ]
+  },
+  "node1_2": {
+    "solved": 1,
+    "total": 5,
+    "traces": [
+      {
+        "problem_id": "SYNTH-101",
+        "solved": true
+      },
+      {
+        "problem_id": "SYNTH-201",
+        "solved": false
+      },
+      {
+        "problem_id": "SYNTH-301",
+        "solved": false
+      },
+      {
+        "problem_id": "SYNTH-401",
+        "solved": false
+      },
+      {
+        "problem_id": "SYNTH-501",
+        "solved": false
+      }
+    ]
+  },
+  "full_hrm": {
+    "solved": 1,
+    "total": 5,
+    "traces": [
+      {
+        "problem_id": "SYNTH-101",
+        "start_time": "2026-11-13T11:36:19.531641+00:00",
+        "end_time": "2026-11-13T11:36:22.284580+00:00",
+        "solved": true,
+        "final_verdict": "AC",
+        "macro_steps": 1,
+        "micro_iterations": 0,
+        "critic_iterations": 1,
+        "planner_blueprints": [
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          }
+        ],
+        "candidate_codes": [
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+        ],
+        "patches": [],
+        "telemetry_history": [
+          {
+            "verdict": "AC",
+            "wall_clock_ms": 13.35,
+            "cpu_time_ms": 6.23,
+            "peak_rss_kb": 99124,
+            "exit_code": 0,
+            "stdout": "6\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "AC",
+            "wall_clock_ms": 14.86,
+            "cpu_time_ms": 6.72,
+            "peak_rss_kb": 99128,
+            "exit_code": 0,
+            "stdout": "",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          }
+        ],
+        "critic_verdicts": [
+          {
+            "analysis": "Solution passes sample cases and runs well within 1.0s limit",
+            "status": "PASS",
+            "bottleneck_class": "none",
+            "escalate_to_planner": false,
+            "target_lines": "none",
+            "patch_directive": "None required"
+          }
+        ],
+        "llm_metrics": [
+          {
+            "prompt_tokens": 143,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 235,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 235,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 235,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 56,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          }
+        ],
+        "final_code": "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+      },
+      {
+        "problem_id": "SYNTH-201",
+        "start_time": "2026-11-13T11:36:23.220814+00:00",
+        "end_time": "2026-11-13T11:36:25.035675+00:00",
+        "solved": false,
+        "final_verdict": "WA",
+        "macro_steps": 2,
+        "micro_iterations": 6,
+        "critic_iterations": 0,
+        "planner_blueprints": [
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          },
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          }
+        ],
+        "candidate_codes": [
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+        ],
+        "patches": [
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;"
+        ],
+        "telemetry_history": [
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.13,
+            "cpu_time_ms": 6.64,
+            "peak_rss_kb": 99140,
+            "exit_code": 0,
+            "stdout": "9\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.01,
+            "cpu_time_ms": 7.0,
+            "peak_rss_kb": 99140,
+            "exit_code": 0,
+            "stdout": "9\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.74,
+            "cpu_time_ms": 5.83,
+            "peak_rss_kb": 99140,
+            "exit_code": 0,
+            "stdout": "9\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 12.93,
+            "cpu_time_ms": 5.63,
+            "peak_rss_kb": 99140,
+            "exit_code": 0,
+            "stdout": "9\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.66,
+            "cpu_time_ms": 6.57,
+            "peak_rss_kb": 99144,
+            "exit_code": 0,
+            "stdout": "9\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.08,
+            "cpu_time_ms": 6.53,
+            "peak_rss_kb": 98988,
+            "exit_code": 0,
+            "stdout": "9\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          }
+        ],
+        "critic_verdicts": [],
+        "llm_metrics": [
+          {
+            "prompt_tokens": 139,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 226,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 202,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 226,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          }
+        ],
+        "final_code": "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+      },
+      {
+        "problem_id": "SYNTH-301",
+        "start_time": "2026-11-13T11:36:25.943807+00:00",
+        "end_time": "2026-11-13T11:36:27.754672+00:00",
+        "solved": false,
+        "final_verdict": "WA",
+        "macro_steps": 2,
+        "micro_iterations": 6,
+        "critic_iterations": 0,
+        "planner_blueprints": [
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          },
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          }
+        ],
+        "candidate_codes": [
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+        ],
+        "patches": [
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;"
+        ],
+        "telemetry_history": [
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.38,
+            "cpu_time_ms": 5.98,
+            "peak_rss_kb": 99164,
+            "exit_code": 0,
+            "stdout": "5\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.0,
+            "cpu_time_ms": 6.48,
+            "peak_rss_kb": 99164,
+            "exit_code": 0,
+            "stdout": "5\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 8.76,
+            "cpu_time_ms": 5.3,
+            "peak_rss_kb": 99164,
+            "exit_code": 0,
+            "stdout": "5\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.15,
+            "cpu_time_ms": 6.48,
+            "peak_rss_kb": 99164,
+            "exit_code": 0,
+            "stdout": "5\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 12.95,
+            "cpu_time_ms": 6.68,
+            "peak_rss_kb": 99100,
+            "exit_code": 0,
+            "stdout": "5\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.32,
+            "cpu_time_ms": 6.07,
+            "peak_rss_kb": 99220,
+            "exit_code": 0,
+            "stdout": "5\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          }
+        ],
+        "critic_verdicts": [],
+        "llm_metrics": [
+          {
+            "prompt_tokens": 142,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 239,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 239,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 239,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 226,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 205,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 239,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 239,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 239,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 226,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          }
+        ],
+        "final_code": "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+      },
+      {
+        "problem_id": "SYNTH-401",
+        "start_time": "2026-11-13T11:36:28.661157+00:00",
+        "end_time": "2026-11-13T11:36:30.465607+00:00",
+        "solved": false,
+        "final_verdict": "WA",
+        "macro_steps": 2,
+        "micro_iterations": 6,
+        "critic_iterations": 0,
+        "planner_blueprints": [
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          },
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          }
+        ],
+        "candidate_codes": [
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+        ],
+        "patches": [
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;"
+        ],
+        "telemetry_history": [
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.42,
+            "cpu_time_ms": 6.74,
+            "peak_rss_kb": 99180,
+            "exit_code": 0,
+            "stdout": "4\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 8.04,
+            "cpu_time_ms": 5.07,
+            "peak_rss_kb": 99180,
+            "exit_code": 0,
+            "stdout": "4\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 7.94,
+            "cpu_time_ms": 5.06,
+            "peak_rss_kb": 99180,
+            "exit_code": 0,
+            "stdout": "4\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.97,
+            "cpu_time_ms": 5.76,
+            "peak_rss_kb": 99012,
+            "exit_code": 0,
+            "stdout": "4\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 14.02,
+            "cpu_time_ms": 6.4,
+            "peak_rss_kb": 99184,
+            "exit_code": 0,
+            "stdout": "4\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.14,
+            "cpu_time_ms": 6.0,
+            "peak_rss_kb": 99184,
+            "exit_code": 0,
+            "stdout": "4\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          }
+        ],
+        "critic_verdicts": [],
+        "llm_metrics": [
+          {
+            "prompt_tokens": 144,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 227,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 207,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 237,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 227,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          }
+        ],
+        "final_code": "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+      },
+      {
+        "problem_id": "SYNTH-501",
+        "start_time": "2026-11-13T11:36:31.365244+00:00",
+        "end_time": "2026-11-13T11:36:33.189752+00:00",
+        "solved": false,
+        "final_verdict": "WA",
+        "macro_steps": 2,
+        "micro_iterations": 6,
+        "critic_iterations": 0,
+        "planner_blueprints": [
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          },
+          {
+            "analysis": "Optimal greedy single-pass scan maintaining running total",
+            "paradigm": "greedy",
+            "data_structures": [
+              "vector"
+            ],
+            "time_complexity": "O(N)",
+            "space_complexity": "O(1)",
+            "use_int64": true,
+            "edge_cases": [
+              "N=1",
+              "all negative values",
+              "overflow > 2^31-1"
+            ],
+            "steps": [
+              "Read test case count T and iterate",
+              "Accumulate sum using long long to avoid 32-bit overflow",
+              "Output result with newline"
+            ]
+          }
+        ],
+        "candidate_codes": [
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}",
+          "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+        ],
+        "patches": [
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;",
+          "--- a/solution.cpp\n+++ b/solution.cpp\n@@ -5,3 +5,3 @@\n     int a, b;\n-    cin >> a;\n+    cin >> a >> b;\n     return 0;"
+        ],
+        "telemetry_history": [
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.69,
+            "cpu_time_ms": 6.62,
+            "peak_rss_kb": 99192,
+            "exit_code": 0,
+            "stdout": "8\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 14.06,
+            "cpu_time_ms": 7.65,
+            "peak_rss_kb": 99088,
+            "exit_code": 0,
+            "stdout": "8\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.79,
+            "cpu_time_ms": 6.29,
+            "peak_rss_kb": 99192,
+            "exit_code": 0,
+            "stdout": "8\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 13.39,
+            "cpu_time_ms": 6.42,
+            "peak_rss_kb": 99192,
+            "exit_code": 0,
+            "stdout": "8\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 8.12,
+            "cpu_time_ms": 5.34,
+            "peak_rss_kb": 99196,
+            "exit_code": 0,
+            "stdout": "8\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          },
+          {
+            "verdict": "WA",
+            "wall_clock_ms": 8.1,
+            "cpu_time_ms": 5.31,
+            "peak_rss_kb": 99108,
+            "exit_code": 0,
+            "stdout": "8\n",
+            "stderr": "",
+            "sandbox_engine": "setrlimit"
+          }
+        ],
+        "critic_verdicts": [],
+        "llm_metrics": [
+          {
+            "prompt_tokens": 138,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 234,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 234,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 234,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 228,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 201,
+            "completion_tokens": 109,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 234,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 234,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 234,
+            "completion_tokens": 112,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 228,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          },
+          {
+            "prompt_tokens": 253,
+            "completion_tokens": 29,
+            "prefill_ms": 2.5,
+            "decode_ms": 10.0,
+            "tokens_per_second": 85.0,
+            "total_latency_ms": 12.5
+          }
+        ],
+        "final_code": "#include <iostream>\n#include <vector>\n#include <numeric>\nusing namespace std;\nusing ll = long long;\n\nvoid solve() {\n    int n;\n    if (!(cin >> n)) return;\n    ll total = 0;\n    for (int i = 0; i < n; ++i) {\n        ll x;\n        cin >> x;\n        total += x;\n    }\n    cout << total << \"\\n\";\n}\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int t = 1;\n    if (cin >> t) {\n        while (t--) solve();\n    }\n    return 0;\n}"
+      }
+    ]
+  },
+  "bucket_stats": {
+    "<1200": {
+      "total": 1,
+      "hrm_solved": 1
+    },
+    "1200-1500": {
+      "total": 1,
+      "hrm_solved": 0
+    },
+    "1500-1800": {
+      "total": 1,
+      "hrm_solved": 0
+    },
+    "1800-2100": {
+      "total": 1,
+      "hrm_solved": 0
+    },
+    "2100+": {
+      "total": 1,
+      "hrm_solved": 0
+    }
+  },
+  "jev_metrics": {
+    "true_positives": 0,
+    "false_positives": 0,
+    "true_negatives": 1,
+    "false_negatives": 0
+  },
+  "total_tokens": 18764,
+  "total_wall_ms": 324.0,
+  "pass_at_1": {
+    "node2_only": 20.0,
+    "node1_2": 20.0,
+    "full_hrm": 20.0
+  },
+  "avg_cpu_wall_ms": 64.8,
+  "avg_tokens_per_problem": 3752.8,
+  "jev_precision": 1.0,
+  "jev_false_positive_rate": 0.0
+}

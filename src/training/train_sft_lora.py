@@ -1,0 +1,225 @@
+"""RTX 3080 (10 GB VRAM) bf16 LoRA SFT and DPO Training Pipeline.
+
+Configured with:
+- r=32, lora_alpha=64, all 7 linear projection layers
+- max_seq_length=2048
+- adamw_8bit optimizer
+- Liger-kernel chunked cross-entropy (fits <6.5 GB on a 10 GB VRAM GPU)
+- Gradient checkpointing
+- TRL DPOTrainer with PEFT adapter-disabled reference model (no duplicate base model weights)
+"""
+
+import os
+import sys
+import yaml
+from pathlib import Path
+from typing import Optional, Dict, Any
+
+try:
+    import torch
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        TrainingArguments,
+        DataCollatorForSeq2Seq,
+    )
+    from peft import LoraConfig, get_peft_model, TaskType
+    from datasets import load_dataset
+except ImportError:
+    torch = None
+
+
+def apply_liger_cross_entropy():
+    """Apply Liger chunked cross-entropy kernel to Qwen models for memory efficiency."""
+    try:
+        from liger_kernel.transformers import apply_liger_kernel_to_qwen2
+        apply_liger_kernel_to_qwen2()
+        print("[HRM Training] Applied Liger chunked cross-entropy kernel for Qwen2.")
+    except Exception as e:
+        print(f"[HRM Training] Liger kernel not activated: {e}. Falling back to standard cross-entropy.")
+
+
+def get_lora_config(r: int = 32, lora_alpha: int = 64, lora_dropout: float = 0.05) -> Any:
+    """LoRA configuration targeting all 7 linear projection layers."""
+    return LoraConfig(
+        r=r,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+        bias="none",
+        task_type=TaskType.CAUSAL_LM,
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
+    )
+
+
+def train_sft(
+    base_model_name_or_path: str,
+    train_data_path: str,
+    output_dir: str = "outputs/checkpoints",
+    config_path: str = "configs/training.yaml",
+) -> str:
+    """Run bf16 LoRA SFT training within the 10GB RTX 3080 VRAM budget."""
+    if torch is None:
+        raise RuntimeError("PyTorch and Transformers are required for training.")
+
+    # Load YAML hyperparameters if available
+    train_cfg: Dict[str, Any] = {}
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+            train_cfg = cfg.get("training", {})
+
+    max_seq_len = train_cfg.get("max_seq_length", 2048)
+    lr = train_cfg.get("learning_rate", 2e-4)
+    batch_size = train_cfg.get("per_device_train_batch_size", 1)
+    grad_accum = train_cfg.get("gradient_accumulation_steps", 16)
+    epochs = train_cfg.get("num_train_epochs", 3)
+    use_bf16 = train_cfg.get("bf16", True) and torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+
+    if train_cfg.get("use_liger_kernel", True):
+        apply_liger_cross_entropy()
+
+    print(f"[HRM SFT] Loading base model: {base_model_name_or_path}")
+    device_map = "auto" if torch.cuda.is_available() else "cpu"
+    torch_dtype = torch.bfloat16 if use_bf16 else torch.float32
+
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name_or_path, trust_remote_code=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    model = AutoModelForCausalLM.from_pretrained(
+        base_model_name_or_path,
+        torch_dtype=torch_dtype,
+        device_map=device_map,
+        trust_remote_code=True,
+    )
+
+    # Enable gradient checkpointing to keep VRAM usage < 6.5 GB
+    model.gradient_checkpointing_enable()
+
+    # Wrap model with LoRA
+    lora_config = get_lora_config(r=32, lora_alpha=64)
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
+
+    # Load dataset
+    raw_dataset = load_dataset("json", data_files=train_data_path, split="train")
+
+    def tokenize_fn(examples):
+        prompts = examples["prompt"]
+        completions = examples["completion"]
+        full_texts = [p + "\n" + c for p, c in zip(prompts, completions)]
+        tokens = tokenizer(
+            full_texts,
+            truncation=True,
+            max_length=max_seq_len,
+            padding=False,
+        )
+        tokens["labels"] = tokens["input_ids"].copy()
+        return tokens
+
+    tokenized_dataset = raw_dataset.map(tokenize_fn, batched=True, remove_columns=raw_dataset.column_names)
+
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        per_device_train_batch_size=batch_size,
+        gradient_accumulation_steps=grad_accum,
+        num_train_epochs=epochs,
+        learning_rate=lr,
+        lr_scheduler_type="cosine",
+        warmup_ratio=0.03,
+        weight_decay=0.01,
+        bf16=use_bf16,
+        fp16=False,
+        optim="adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
+        gradient_checkpointing=True,
+        logging_steps=10,
+        save_strategy="steps",
+        save_steps=250,
+        save_total_limit=2,
+    )
+
+    from transformers import Trainer
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized_dataset,
+        data_collator=DataCollatorForSeq2Seq(tokenizer, pad_to_multiple_of=8, return_tensors="pt"),
+    )
+
+    print("[HRM SFT] Commencing training...")
+    trainer.train()
+
+    final_adapter_path = os.path.join(output_dir, "final_adapter")
+    model.save_pretrained(final_adapter_path)
+    tokenizer.save_pretrained(final_adapter_path)
+    print(f"[HRM SFT] Successfully saved LoRA adapter to {final_adapter_path}")
+    return final_adapter_path
+
+
+def train_dpo(
+    base_model_name_or_path: str,
+    adapter_path: str,
+    dpo_data_path: str,
+    output_dir: str = "outputs/checkpoints_dpo",
+) -> str:
+    """Run DPO training using PEFT adapter-disabled reference model (no duplicate weights in VRAM)."""
+    try:
+        from trl import DPOTrainer, DPOConfig
+    except ImportError:
+        raise RuntimeError("TRL is required for DPO training. Install via `uv pip install trl`.")
+
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name_or_path, trust_remote_code=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+    torch_dtype = torch.bfloat16 if use_bf16 else torch.float32
+
+    model = AutoModelForCausalLM.from_pretrained(
+        base_model_name_or_path,
+        torch_dtype=torch_dtype,
+        device_map="auto" if torch.cuda.is_available() else "cpu",
+        trust_remote_code=True,
+    )
+    from peft import PeftModel
+    model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
+
+    dpo_dataset = load_dataset("json", data_files=dpo_data_path, split="train")
+
+    dpo_config = DPOConfig(
+        output_dir=output_dir,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=16,
+        num_train_epochs=2,
+        learning_rate=5e-5,
+        bf16=use_bf16,
+        optim="adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
+        gradient_checkpointing=True,
+        logging_steps=10,
+    )
+
+    # When ref_model=None, DPOTrainer disables adapter during ref forward pass
+    # saving ~3-4 GB VRAM and fitting easily in 10 GB VRAM!
+    trainer = DPOTrainer(
+        model=model,
+        ref_model=None,
+        args=dpo_config,
+        train_dataset=dpo_dataset,
+        tokenizer=tokenizer,
+        max_length=2048,
+    )
+
+    print("[HRM DPO] Starting adapter-disabled reference DPO training...")
+    trainer.train()
+
+    final_dpo_path = os.path.join(output_dir, "final_dpo_adapter")
+    model.save_pretrained(final_dpo_path)
+    return final_dpo_path

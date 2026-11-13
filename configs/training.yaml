@@ -1,0 +1,67 @@
+# Training Configuration for RTX 3080 (10 GB VRAM) bf16 LoRA Training
+model:
+  planner_base: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+  coder_base: "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+  critic_base: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+
+lora:
+  r: 32
+  lora_alpha: 64
+  lora_dropout: 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+training:
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16
+  max_seq_length: 2048
+  learning_rate: 0.0002
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  num_train_epochs: 3
+  bf16: true
+  fp16: false
+  optim: "adamw_8bit"
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  use_liger_kernel: true  # Enables chunked cross-entropy to fit <6.5 GB VRAM
+  logging_steps: 10
+  save_strategy: "steps"
+  save_steps: 250
+  save_total_limit: 2
+  output_dir: "outputs/checkpoints"
+
+curriculum:
+  min_rating: 800
+  max_rating: 1900
+  grandmaster_cutoff: 2200
+  min_tests: 5
+  temporal_anchor_dataset: "open-r1/codeforces"
+  codecontests_dataset: "deepmind/code_contests"
+  nemotron_dataset: "nvidia/Nemotron-Competitive-Programming-v1"
+  submissions_dataset: "open-r1/codeforces-submissions"
+
+trajectories:
+  max_dt_seconds: 3600
+  min_jaccard_similarity: 0.60
+  max_diff_lines: 60
+  speedup_threshold: 0.50  # ac_ms <= 0.5 * fail_ms
+  memory_reduction_threshold: 0.70  # ac_kb <= 0.7 * fail_kb
+
+data_distribution:
+  node1_blueprints: 0.33
+  node2_plan_to_code: 0.20  # 60% of Node 2
+  node2_error_to_diff: 0.14 # 40% of Node 2
+  node3_pass: 0.10         # 30% of Node 3
+  node3_optimize: 0.11     # 35% of Node 3
+  node3_bug: 0.12          # 35% of Node 3

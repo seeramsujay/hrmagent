@@ -1,0 +1,16 @@
+root ::= "{\n"
+  "  \"analysis\": " string ",\n"
+  "  \"status\": " status ",\n"
+  "  \"bottleneck_class\": " bottleneck ",\n"
+  "  \"escalate_to_planner\": " boolean ",\n"
+  "  \"target_lines\": " string ",\n"
+  "  \"patch_directive\": " string "\n"
+"}"
+
+status ::= "\"PASS\"" | "\"OPTIMIZE\"" | "\"BUG\""
+
+bottleneck ::= "\"none\"" | "\"asymptotic_time\"" | "\"constant_factor\"" | "\"memory_limit\"" | "\"integer_overflow\"" | "\"edge_case_miss\"" | "\"logic_flaw\"" | "\"io_overhead\""
+
+boolean ::= "true" | "false"
+
+string ::= "\"" ([^"\\\n] | "\\" [abfnrtv"\\/] | "\\u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])* "\""

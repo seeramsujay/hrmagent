@@ -1,0 +1,22 @@
+root ::= "{\n"
+  "  \"analysis\": " string ",\n"
+  "  \"paradigm\": " paradigm ",\n"
+  "  \"data_structures\": " string-list ",\n"
+  "  \"time_complexity\": " complexity ",\n"
+  "  \"space_complexity\": " complexity ",\n"
+  "  \"use_int64\": " boolean ",\n"
+  "  \"edge_cases\": " string-list ",\n"
+  "  \"steps\": " string-list "\n"
+"}"
+
+paradigm ::= "\"greedy\"" | "\"dynamic_programming\"" | "\"two_pointers\"" | "\"binary_search\"" | "\"graph_bfs_dfs\"" | "\"shortest_path\"" | "\"disjoint_set_union\"" | "\"segment_tree_fenwick\"" | "\"math_number_theory\"" | "\"constructive\"" | "\"bitmask\"" | "\"divide_and_conquer\"" | "\"flow_matching\"" | "\"brute_force_backtrack\""
+
+complexity ::= "\"O(" [a-zA-Z0-9 +*^/._()]+ ")\""
+
+boolean ::= "true" | "false"
+
+string-list ::= "[" ws (string ("," ws string)*)? ws "]"
+
+string ::= "\"" ([^"\\\n] | "\\" [abfnrtv"\\/] | "\\u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])* "\""
+
+ws ::= [ \t\n\r]*

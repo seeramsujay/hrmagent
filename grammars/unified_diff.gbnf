@@ -1,0 +1,11 @@
+root ::= diff-header hunk+
+
+diff-header ::= "--- a/" filename "\n+++ b/" filename "\n"
+
+filename ::= [a-zA-Z0-9_.-]+
+
+hunk ::= "@@ -" range " +" range " @@" [^\n]* "\n" hunk-line+
+
+range ::= [0-9]+ ("," [0-9]+)?
+
+hunk-line ::= [ +-][^\n]* "\n"

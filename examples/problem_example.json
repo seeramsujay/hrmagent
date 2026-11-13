@@ -1,0 +1,18 @@
+{
+  "id": "CF-1800C",
+  "title": "Teleporters (Easy Version)",
+  "description": "Consider points on the number line 0, 1, ..., n. There is a teleporter on each point 1 to n. The cost to use teleporter at i is a[i] + i. You start at 0 with c coins. What is the maximum number of teleporters you can use?",
+  "input_format": "The first line contains t test cases. Each test case consists of n and c, followed by array a.",
+  "output_format": "For each test case output the maximum number of teleporters.",
+  "constraints": "1 <= t <= 1000, 1 <= n <= 2*10^5, 1 <= c <= 10^9, 1 <= a[i] <= 10^9",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "sample_inputs": [
+    "1\n5 8\n2 3 1 4 9\n"
+  ],
+  "sample_outputs": [
+    "2\n"
+  ],
+  "rating": 1100,
+  "tags": ["greedy", "sortings"]
+}
