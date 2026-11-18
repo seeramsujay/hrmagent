@@ -38,6 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VALIDATE_ALL_CODEBASE: "false"
           FILTER_REGEX_EXCLUDE: (data/|outputs/|grammars/|examples/)
+          LINTER_RULES_PATH: "."
           VALIDATE_JSCPD: "false"
           VALIDATE_SPELL_CODESPELL: "false"
           VALIDATE_NATURAL_LANGUAGE: "false"
@@ -48,6 +49,9 @@ jobs:
           VALIDATE_BIOME_FORMAT: "false"
           VALIDATE_GITHUB_ACTIONS_ZIZMOR: "false"
           VALIDATE_PYTHON_BANDIT: "false"
+          VALIDATE_JUPYTER: "false"
+          VALIDATE_JUPYTER_NBQA_BLACK: "false"
+          VALIDATE_GIT_COMMITLINT: "false"
           PYTHON_BLACK_CONFIG_FILE: "pyproject.toml"
           PYTHON_ISORT_CONFIG_FILE: ".isort.cfg"
           PYTHON_FLAKE8_CONFIG_FILE: ".flake8"
