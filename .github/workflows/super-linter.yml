@@ -46,3 +46,8 @@ jobs:
           VALIDATE_YAML_PRETTIER: "false"
           VALIDATE_JSON_PRETTIER: "false"
           VALIDATE_BIOME_FORMAT: "false"
+          VALIDATE_GITHUB_ACTIONS_ZIZMOR: "false"
+          VALIDATE_PYTHON_BANDIT: "false"
+          PYTHON_BLACK_CONFIG_FILE: "pyproject.toml"
+          PYTHON_ISORT_CONFIG_FILE: ".isort.cfg"
+          PYTHON_FLAKE8_CONFIG_FILE: ".flake8"
