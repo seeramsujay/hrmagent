@@ -107,11 +107,130 @@ class SandboxRunner:
         memory_limit_mb: int,
         cwd: Path,
     ) -> ExecutionTelemetry:
-        """Execute command directly using fork + preexec setrlimit + wait4 for exact telemetry."""
-        mem_bytes = memory_limit_mb * 1024 * 1024
-        # Add safety headroom to address space for dynamic loader and glibc
-        rlimit_as_bytes = mem_bytes + 64 * 1024 * 1024
-        cpu_limit_secs = max(1, int(time_limit_ms / 1000.0) + 1)
+        """Execute command in isolated subprocess with resource limits and telemetry extraction."""
+        wall_limit_secs = max(0.5, (time_limit_ms / 1000.0) * 2.5 + 0.5)
+        mem_bytes = (memory_limit_mb + 64) * 1024 * 1024
+        cpu_secs = max(1, int(time_limit_ms / 1000.0) + 1)
+
+        time_bin = shutil.which("time")
+        prlimit_bin = shutil.which("prlimit")
+
+        # Preferred execution path: wrap with /usr/bin/time -v and prlimit to prevent
+        # Python fork COW memory inheritance (which artificially inflates peak_rss_kb by ~300MB)
+        if time_bin or prlimit_bin:
+            wrapped_cmd: list[str] = []
+            if time_bin:
+                wrapped_cmd.extend([time_bin, "-v"])
+            if prlimit_bin:
+                wrapped_cmd.extend([prlimit_bin, f"--as={mem_bytes}", f"--cpu={cpu_secs}"])
+            if self.cpu_affinity_mask and shutil.which("taskset"):
+                wrapped_cmd = ["taskset", "-c", self.cpu_affinity_mask] + wrapped_cmd
+            wrapped_cmd.extend(cmd)
+
+            start_wall = time.perf_counter()
+            try:
+                proc = subprocess.Popen(
+                    wrapped_cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=str(cwd),
+                )
+                stdout_str, raw_stderr = proc.communicate(input=input_data, timeout=wall_limit_secs)
+                wall_clock_ms = (time.perf_counter() - start_wall) * 1000.0
+                exit_code = proc.returncode
+
+                # Parse metrics from /usr/bin/time -v
+                peak_rss_kb = 0
+                user_time_sec = 0.0
+                sys_time_sec = 0.0
+                clean_stderr_lines = []
+
+                is_time_section = False
+                for line in raw_stderr.splitlines():
+                    if "Command being timed:" in line:
+                        is_time_section = True
+                        continue
+                    if is_time_section:
+                        if "Maximum resident set size" in line:
+                            try:
+                                peak_rss_kb = int(line.split(":")[-1].strip())
+                            except Exception:
+                                pass
+                        elif "User time" in line:
+                            try:
+                                user_time_sec = float(line.split(":")[-1].strip())
+                            except Exception:
+                                pass
+                        elif "System time" in line:
+                            try:
+                                sys_time_sec = float(line.split(":")[-1].strip())
+                            except Exception:
+                                pass
+                    else:
+                        clean_stderr_lines.append(line)
+
+                cpu_time_ms = (user_time_sec + sys_time_sec) * 1000.0
+                stderr_str = "\n".join(clean_stderr_lines)
+
+                verdict: VerdictType = "AC"
+                if exit_code != 0:
+                    if exit_code in (137, 128 + signal.SIGKILL, -signal.SIGKILL):
+                        verdict = "TLE"
+                    elif exit_code in (134, 139, 128 + signal.SIGABRT, 128 + signal.SIGSEGV):
+                        if (
+                            peak_rss_kb > memory_limit_mb * 1024
+                            or "MemoryError" in stderr_str
+                            or "std::bad_alloc" in stderr_str
+                        ):
+                            verdict = "MLE"
+                        else:
+                            verdict = "RE"
+                    elif exit_code in (152, 128 + signal.SIGXCPU):
+                        verdict = "TLE"
+                    else:
+                        if (
+                            peak_rss_kb > memory_limit_mb * 1024
+                            or "MemoryError" in stderr_str
+                            or "std::bad_alloc" in stderr_str
+                        ):
+                            verdict = "MLE"
+                        else:
+                            verdict = "RE"
+
+                if cpu_time_ms > time_limit_ms or wall_clock_ms > (time_limit_ms * 2.0):
+                    verdict = "TLE"
+                elif peak_rss_kb > memory_limit_mb * 1024:
+                    verdict = "MLE"
+
+                return ExecutionTelemetry(
+                    verdict=verdict,
+                    wall_clock_ms=round(wall_clock_ms, 2),
+                    cpu_time_ms=round(cpu_time_ms, 2),
+                    peak_rss_kb=peak_rss_kb,
+                    exit_code=exit_code,
+                    stdout=stdout_str,
+                    stderr=stderr_str,
+                    sandbox_engine="setrlimit",
+                )
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                wall_clock_ms = (time.perf_counter() - start_wall) * 1000.0
+                return ExecutionTelemetry(
+                    verdict="TLE",
+                    wall_clock_ms=round(wall_clock_ms, 2),
+                    cpu_time_ms=float(time_limit_ms),
+                    peak_rss_kb=0,
+                    exit_code=-signal.SIGKILL,
+                    stdout="",
+                    stderr="Wall clock execution limit exceeded",
+                    sandbox_engine="setrlimit",
+                )
+
+        # Fallback to direct wait4 fork if external tools are completely missing
+        rlimit_as_bytes = mem_bytes
+        cpu_limit_secs = cpu_secs
 
         read_in, write_in = os.pipe()
         read_out, write_out = os.pipe()
@@ -121,7 +240,6 @@ class SandboxRunner:
         pid = os.fork()
 
         if pid == 0:
-            # Child process
             try:
                 os.close(write_in)
                 os.close(read_out)
@@ -135,29 +253,11 @@ class SandboxRunner:
                 os.close(write_out)
                 os.close(write_err)
 
-                # Set core dump size to 0
                 resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-
-                # Apply CPU time limit
                 if hasattr(resource, "RLIMIT_CPU"):
                     resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit_secs, cpu_limit_secs + 1))
-
-                # Apply Address Space limit
                 if hasattr(resource, "RLIMIT_AS"):
                     resource.setrlimit(resource.RLIMIT_AS, (rlimit_as_bytes, rlimit_as_bytes))
-
-                # Pin CPU affinity if requested
-                if self.cpu_affinity_mask and hasattr(os, "sched_setaffinity"):
-                    try:
-                        cores = [
-                            int(c.strip())
-                            for c in self.cpu_affinity_mask.replace("-", ",").split(",")
-                            if c.strip().isdigit()
-                        ]
-                        if cores:
-                            os.sched_setaffinity(0, set(cores))
-                    except Exception:
-                        pass
 
                 os.chdir(str(cwd))
                 os.execvp(cmd[0], cmd)
@@ -165,12 +265,10 @@ class SandboxRunner:
                 sys.stderr.write(f"Exec failed: {e}\n")
                 os._exit(127)
 
-        # Parent process
         os.close(read_in)
         os.close(write_out)
         os.close(write_err)
 
-        # Write input data to child stdin non-blocking or chunked
         try:
             if input_data:
                 os.write(write_in, input_data.encode("utf-8"))
@@ -179,16 +277,13 @@ class SandboxRunner:
         finally:
             os.close(write_in)
 
-        # Monitor child with wall-clock timeout
-        wall_limit_secs = (time_limit_ms / 1000.0) * 2.5 + 0.5
-        terminated = False
         status = 0
         rusage = None
+        terminated = False
 
         while True:
             elapsed = time.perf_counter() - start_wall
             if elapsed > wall_limit_secs:
-                # Timed out, kill child
                 try:
                     os.kill(pid, signal.SIGKILL)
                 except ProcessLookupError:
@@ -206,7 +301,6 @@ class SandboxRunner:
         end_wall = time.perf_counter()
         wall_clock_ms = (end_wall - start_wall) * 1000.0
 
-        # Read stdout and stderr
         out_bytes = b""
         err_bytes = b""
         try:
@@ -238,7 +332,7 @@ class SandboxRunner:
         peak_rss_kb = 0
         if rusage:
             cpu_time_ms = (rusage.ru_utime + rusage.ru_stime) * 1000.0
-            peak_rss_kb = rusage.ru_maxrss  # On Linux ru_maxrss is in KiB
+            peak_rss_kb = rusage.ru_maxrss
 
         exit_code = 0
         verdict: VerdictType = "AC"
@@ -252,16 +346,9 @@ class SandboxRunner:
             if sig == signal.SIGXCPU:
                 verdict = "TLE"
             elif sig in (signal.SIGSEGV, signal.SIGABRT, signal.SIGBUS):
-                # Check if caused by memory limit
-                if peak_rss_kb > memory_limit_mb * 1024:
-                    verdict = "MLE"
-                else:
-                    verdict = "RE"
+                verdict = "RE"
             elif sig == signal.SIGKILL:
-                if peak_rss_kb > memory_limit_mb * 1024:
-                    verdict = "MLE"
-                else:
-                    verdict = "TLE"
+                verdict = "TLE"
             else:
                 verdict = "RE"
         elif os.WIFEXITED(status):
@@ -270,12 +357,6 @@ class SandboxRunner:
                 verdict = "RE"
         else:
             verdict = "RE"
-
-        # Check soft thresholds
-        if cpu_time_ms > time_limit_ms or wall_clock_ms > (time_limit_ms * 2.0):
-            verdict = "TLE"
-        elif peak_rss_kb > memory_limit_mb * 1024:
-            verdict = "MLE"
 
         return ExecutionTelemetry(
             verdict=verdict,

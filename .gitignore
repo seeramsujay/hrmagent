@@ -15,4 +15,7 @@ outputs/checkpoints_dpo/
 outputs/checkpoints_grpo/
 outputs/checkpoints_architect_critic/
 outputs/checkpoints*
+outputs/merged/
+outputs/*.safetensors
+outputs/harness_report.json
 data/curated/*.parquet

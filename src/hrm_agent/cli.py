@@ -336,5 +336,76 @@ def eval_benchmark(
     console.print(f"[bold green]Benchmark evaluation report written to {report_path}[/bold green]")
 
 
+@app.command("serve")
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Host address to bind"),
+    port: int = typer.Option(8000, help="Port to listen on"),
+    mode: str = typer.Option("dual-pair", help="Inference mode ('dual-pair' or 'mock')"),
+    device: str = typer.Option("auto", help="Execution device ('auto', 'cuda', 'cpu')"),
+    role1_path: str = typer.Option("outputs/merged/role1_architect_critic", help="Path to Role 1 merged model"),
+    role2_path: str = typer.Option("outputs/merged/role2_coder_patcher", help="Path to Role 2 merged model"),
+    reload: bool = typer.Option(False, help="Enable auto-reload for development"),
+):
+    """Launch the localhost HRM Agent server with OpenAI and closed-loop endpoints."""
+    console.print(
+        Panel.fit(
+            f"[bold cyan]Launching HRM Agent Localhost Server on http://{host}:{port}[/bold cyan]\n"
+            f"[dim]Mode: {mode} | Device: {device}[/dim]\n"
+            f"[green]OpenAI Endpoints: /v1/chat/completions, /v1/models\n"
+            f"HRM Endpoints: /solve, /evaluate, /health[/green]"
+        )
+    )
+    import uvicorn
+
+    from hrm_agent.server import create_app
+
+    server_app = create_app(
+        mode=mode,
+        device=device,
+        role1_path=role1_path,
+        role2_path=role2_path,
+    )
+    uvicorn.run(server_app, host=host, port=port, reload=reload)
+
+
+@app.command("harness")
+def test_harness(
+    server_url: str = typer.Option("http://127.0.0.1:8000", help="URL of running HRM server"),
+    problems_file: str = typer.Option("data/codechef_raw.json", help="Path to benchmark JSON corpus"),
+    limit: int = typer.Option(5, help="Number of challenges to benchmark"),
+    language: str = typer.Option("python", help="Target language ('python' or 'cpp')"),
+    report_path: str = typer.Option("outputs/harness_report.json", help="Output path for harness report"),
+):
+    """Run automated evaluation harness against the HRM server via HTTP."""
+    from hrm_agent.harness import run_benchmark_harness
+
+    run_benchmark_harness(
+        server_url=server_url,
+        problems_file=problems_file,
+        limit=limit,
+        language=language,
+        report_path=report_path,
+    )
+
+
+@app.command("merge-adapters")
+def merge_adapters(
+    base_model: str = typer.Option("Qwen/Qwen2.5-Coder-0.5B-Instruct", help="Base Hugging Face model identifier"),
+    role1_adapter: str = typer.Option("outputs/checkpoints_architect_critic/final_adapter", help="Role 1 LoRA path"),
+    role2_adapter: str = typer.Option("outputs/checkpoints_dpo/final_dpo_adapter", help="Role 2 LoRA path"),
+    role1_output: str = typer.Option("outputs/merged/role1_architect_critic", help="Destination for merged Role 1"),
+    role2_output: str = typer.Option("outputs/merged/role2_coder_patcher", help="Destination for merged Role 2"),
+):
+    """Merge trained LoRA adapters into standalone Hugging Face weight directories."""
+    console.print(Panel.fit("[bold magenta]Merging HRM Dual-Pair LoRA Adapters[/bold magenta]"))
+    console.print(f"[cyan]Role 1 (Architect & Critic): {role1_adapter} -> {role1_output}[/cyan]")
+    m1 = merge_peft_adapter(base_model, role1_adapter, role1_output)
+    console.print(f"[bold green]Role 1 merged successfully at {m1}[/bold green]")
+
+    console.print(f"[cyan]Role 2 (Fast Coder & Patcher): {role2_adapter} -> {role2_output}[/cyan]")
+    m2 = merge_peft_adapter(base_model, role2_adapter, role2_output)
+    console.print(f"[bold green]Role 2 merged successfully at {m2}[/bold green]")
+
+
 if __name__ == "__main__":
     app()

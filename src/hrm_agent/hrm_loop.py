@@ -146,10 +146,19 @@ class HRMAgentLoop:
             max_tokens=1024,
             temperature=temp,
         )
-        # Strip extraneous markdown backticks if leaked
+        # Strip extraneous markdown backticks or fences if leaked
         clean_code = raw_code.strip()
-        if clean_code.startswith("```"):
-            clean_code = clean_code.split("\n", 1)[1]
+        if "```" in clean_code:
+            parts = clean_code.split("```")
+            if len(parts) >= 3:
+                code_block = parts[1]
+                lines = code_block.splitlines()
+                if lines and lines[0].strip().lower() in ["cpp", "c++", "python", "py"]:
+                    clean_code = "\n".join(lines[1:])
+                else:
+                    clean_code = code_block
+            elif clean_code.startswith("```"):
+                clean_code = clean_code.split("\n", 1)[1]
         if clean_code.endswith("```"):
             clean_code = clean_code.rsplit("\n", 1)[0]
         return clean_code.strip(), telem
@@ -178,7 +187,15 @@ class HRMAgentLoop:
             max_tokens=512,
             temperature=0.3,
         )
-        return diff_text.strip(), telem
+        clean_diff = diff_text.strip()
+        if "```" in clean_diff:
+            parts = clean_diff.split("```")
+            if len(parts) >= 3:
+                clean_diff = parts[1]
+                lines = clean_diff.splitlines()
+                if lines and lines[0].strip().lower() in ["diff", "udiff", "patch"]:
+                    clean_diff = "\n".join(lines[1:])
+        return clean_diff.strip(), telem
 
     def _run_critic(
         self, spec: ProblemSpec, current_code: str, stress_telem: ExecutionTelemetry
