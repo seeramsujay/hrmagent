@@ -1,5 +1,7 @@
 """Integration and unit test suite for localhost HRM server and harness client."""
 
+import json
+
 from starlette.testclient import TestClient
 
 from hrm_agent.harness import HRMHarnessClient, load_harness_problems
@@ -153,13 +155,38 @@ def test_evaluate_endpoint():
     assert len(res_data["results"]) == 2
 
 
-def test_load_harness_problems():
-    """Verify loading benchmark problems for evaluation harness."""
-    specs = load_harness_problems("data/codechef_raw.json", limit=3)
-    assert len(specs) >= 2
-    for s in specs:
-        assert isinstance(s, ProblemSpec)
-        assert len(s.id) > 0
+def test_load_harness_problems(tmp_path):
+    """Verify loading benchmark problems from an explicit JSON fixture and fallback."""
+    # 1. Test explicit corpus fixture conversion
+    corpus_file = tmp_path / "test_corpus.json"
+    raw_data = [
+        {
+            "id": "FIXTURE-101",
+            "title": "Fixture Challenge",
+            "description": "Calculate square of integer.",
+            "input_format": "Integer N",
+            "output_format": "Integer N^2",
+            "constraints": "1 <= N <= 10^4",
+            "sample_inputs": ["5\n"],
+            "sample_outputs": ["25\n"],
+            "rating": 1300,
+        }
+    ]
+    with open(corpus_file, "w", encoding="utf-8") as f:
+        json.dump(raw_data, f)
+
+    specs = load_harness_problems(str(corpus_file), limit=1)
+    assert len(specs) == 1
+    assert specs[0].id == "FIXTURE-101"
+    assert specs[0].title == "Fixture Challenge"
+    assert specs[0].sample_inputs == ["5\n"]
+    assert specs[0].sample_outputs == ["25\n"]
+    assert specs[0].rating == 1300
+
+    # 2. Test synthetic fallback when file does not exist
+    fallback_specs = load_harness_problems(str(tmp_path / "non_existent.json"), limit=2)
+    assert len(fallback_specs) == 2
+    assert fallback_specs[0].id == "HARNESS-SYNTH-1"
 
 
 def test_harness_client_integration():

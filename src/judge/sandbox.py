@@ -115,14 +115,13 @@ class SandboxRunner:
         time_bin = shutil.which("time")
         prlimit_bin = shutil.which("prlimit")
 
-        # Preferred execution path: wrap with /usr/bin/time -v and prlimit to prevent
-        # Python fork COW memory inheritance (which artificially inflates peak_rss_kb by ~300MB)
-        if time_bin or prlimit_bin:
+        # Preferred execution path: wrap with prlimit (and optionally /usr/bin/time -v) to enforce
+        # exact resource bounds while avoiding Python fork COW memory overhead
+        if prlimit_bin:
             wrapped_cmd: list[str] = []
             if time_bin:
                 wrapped_cmd.extend([time_bin, "-v"])
-            if prlimit_bin:
-                wrapped_cmd.extend([prlimit_bin, f"--as={mem_bytes}", f"--cpu={cpu_secs}"])
+            wrapped_cmd.extend([prlimit_bin, f"--as={mem_bytes}", f"--cpu={cpu_secs}"])
             if self.cpu_affinity_mask and shutil.which("taskset"):
                 wrapped_cmd = ["taskset", "-c", self.cpu_affinity_mask] + wrapped_cmd
             wrapped_cmd.extend(cmd)
