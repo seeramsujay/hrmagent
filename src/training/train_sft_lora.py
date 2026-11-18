@@ -64,8 +64,12 @@ def train_sft(
     train_data_path: str,
     output_dir: str = "outputs/checkpoints",
     config_path: str = "configs/training.yaml",
+    epochs: Optional[int] = None,
+    learning_rate: Optional[float] = None,
+    batch_size: Optional[int] = None,
+    grad_accum: Optional[int] = None,
 ) -> str:
-    """Run bf16 LoRA SFT training within the 10GB RTX 3080 VRAM budget."""
+    """Run bf16 LoRA SFT training within the 10GB RTX 3080 / 6GB RTX 4050 VRAM budget."""
     if torch is None:
         raise RuntimeError("PyTorch and Transformers are required for training.")
 
@@ -77,10 +81,10 @@ def train_sft(
             train_cfg = cfg.get("training", {})
 
     max_seq_len = train_cfg.get("max_seq_length", 2048)
-    lr = train_cfg.get("learning_rate", 2e-4)
-    batch_size = train_cfg.get("per_device_train_batch_size", 1)
-    grad_accum = train_cfg.get("gradient_accumulation_steps", 16)
-    epochs = train_cfg.get("num_train_epochs", 3)
+    lr = learning_rate if learning_rate is not None else train_cfg.get("learning_rate", 2e-4)
+    bs = batch_size if batch_size is not None else train_cfg.get("per_device_train_batch_size", 1)
+    ga = grad_accum if grad_accum is not None else train_cfg.get("gradient_accumulation_steps", 4)
+    ep = epochs if epochs is not None else train_cfg.get("num_train_epochs", 3)
     use_bf16 = train_cfg.get("bf16", True) and torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 
     if train_cfg.get("use_liger_kernel", True):
@@ -101,7 +105,7 @@ def train_sft(
         trust_remote_code=True,
     )
 
-    # Enable gradient checkpointing to keep VRAM usage < 6.5 GB
+    # Enable gradient checkpointing to keep VRAM usage < 4.5 GB
     model.gradient_checkpointing_enable()
 
     # Wrap model with LoRA
@@ -115,34 +119,47 @@ def train_sft(
     def tokenize_fn(examples):
         prompts = examples["prompt"]
         completions = examples["completion"]
-        full_texts = [p + "\n" + c for p, c in zip(prompts, completions)]
-        tokens = tokenizer(
-            full_texts,
-            truncation=True,
-            max_length=max_seq_len,
-            padding=False,
-        )
-        tokens["labels"] = tokens["input_ids"].copy()
-        return tokens
+        input_ids_list = []
+        labels_list = []
+        attention_mask_list = []
+
+        for p, c in zip(prompts, completions):
+            prompt_enc = tokenizer(p + "\n", truncation=True, max_length=max_seq_len, padding=False)
+            prompt_len = len(prompt_enc["input_ids"])
+            full_enc = tokenizer(p + "\n" + c, truncation=True, max_length=max_seq_len, padding=False)
+            input_ids = full_enc["input_ids"]
+            attn_mask = full_enc["attention_mask"]
+            labels = list(input_ids)
+            # Mask prompt tokens with -100 so loss is computed exclusively on the target completion
+            for i in range(min(prompt_len, len(labels))):
+                labels[i] = -100
+            input_ids_list.append(input_ids)
+            labels_list.append(labels)
+            attention_mask_list.append(attn_mask)
+
+        return {
+            "input_ids": input_ids_list,
+            "labels": labels_list,
+            "attention_mask": attention_mask_list,
+        }
 
     tokenized_dataset = raw_dataset.map(tokenize_fn, batched=True, remove_columns=raw_dataset.column_names)
 
     training_args = TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=batch_size,
-        gradient_accumulation_steps=grad_accum,
-        num_train_epochs=epochs,
+        per_device_train_batch_size=bs,
+        gradient_accumulation_steps=ga,
+        num_train_epochs=ep,
         learning_rate=lr,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.03,
+        warmup_steps=1,
         weight_decay=0.01,
         bf16=use_bf16,
         fp16=False,
         optim="adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
         gradient_checkpointing=True,
-        logging_steps=10,
-        save_strategy="steps",
-        save_steps=250,
+        logging_steps=1,
+        save_strategy="epoch",
         save_total_limit=2,
     )
 

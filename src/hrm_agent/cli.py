@@ -46,6 +46,8 @@ def mine_data(
     max_rating: int = typer.Option(1900, help="Maximum rating bound"),
     gm_cutoff: int = typer.Option(2200, help="Upper Grandmaster cutoff"),
     seed_synthetic: bool = typer.Option(True, help="Seed synthetic problems and trajectories"),
+    include_codechef: bool = typer.Option(True, help="Include CodeChef competitive programming challenges"),
+    codechef_json: Optional[str] = typer.Option("data/codechef_raw.json", help="Path to local or cached CodeChef JSON file"),
 ):
     """Run Hugging Face + DuckDB curation and trajectory mining pipeline."""
     console.print(Panel.fit("[bold blue]Starting HRM Dataset Mining Pipeline[/bold blue]"))
@@ -59,6 +61,11 @@ def mine_data(
     if seed_synthetic:
         console.print("[green]Seeding offline synthetic problems and trajectory pairs...[/green]")
         miner.populate_synthetic_seed()
+
+    if include_codechef:
+        console.print("[green]Mining CodeChef challenges into DuckDB...[/green]")
+        cc_count = miner.populate_codechef_challenges(json_path=codechef_json)
+        console.print(f"[bold cyan]Successfully integrated {cc_count} CodeChef challenges![/bold cyan]")
 
     paths = miner.build_balanced_datasets()
     table = Table(title="Generated Balanced Datasets")
@@ -76,33 +83,47 @@ def train_lora(
     config_path: str = typer.Option("configs/training.yaml", help="Path to training config"),
     mode: str = typer.Option("sft", help="Training mode: 'sft' or 'dpo'"),
     train_data: Optional[str] = typer.Option(None, help="Path to training jsonl"),
+    base_model: Optional[str] = typer.Option(None, help="Base model identifier or path"),
     output_dir: str = typer.Option("outputs/checkpoints", help="Output directory"),
+    epochs: Optional[int] = typer.Option(None, help="Number of training epochs"),
+    grad_accum: Optional[int] = typer.Option(None, help="Gradient accumulation steps"),
+    learning_rate: Optional[float] = typer.Option(None, help="Learning rate override"),
 ):
-    """Train bf16 LoRA adapter on single 10GB RTX 3080 with adamw_8bit and chunked CE."""
+    """Train bf16 LoRA adapter on single GPU with adamw_8bit and chunked CE."""
     console.print(Panel.fit(f"[bold magenta]HRM LoRA Training — Mode: {mode.upper()}[/bold magenta]"))
     from training.train_sft_lora import train_sft, train_dpo
 
     # Load config defaults
-    base_model = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
-    if os.path.exists(config_path):
+    chosen_base = base_model
+    if chosen_base is None and os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
-            base_model = cfg.get("model", {}).get("planner_base", base_model)
+            model_cfg = cfg.get("model", {})
+            data_str = (train_data or "").lower()
+            if "node2" in data_str:
+                chosen_base = model_cfg.get("coder_base", "Qwen/Qwen2.5-Coder-0.5B-Instruct")
+            else:
+                chosen_base = model_cfg.get("coder_base", "Qwen/Qwen2.5-Coder-0.5B-Instruct")
+    if chosen_base is None:
+        chosen_base = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
 
     if mode == "sft":
-        data_file = train_data or "data/curated/node1_blueprints.jsonl"
+        data_file = train_data or "data/curated/node2_plan_to_code.jsonl"
         adapter_path = train_sft(
-            base_model_name_or_path=base_model,
+            base_model_name_or_path=chosen_base,
             train_data_path=data_file,
             output_dir=output_dir,
             config_path=config_path,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            grad_accum=grad_accum,
         )
         console.print(f"[bold green]LoRA SFT training complete. Adapter at {adapter_path}[/bold green]")
     elif mode == "dpo":
         dpo_data = train_data or "data/curated/node2_dpo.jsonl"
         adapter_in = os.path.join(output_dir, "final_adapter")
         final_dpo = train_dpo(
-            base_model_name_or_path=base_model,
+            base_model_name_or_path=chosen_base,
             adapter_path=adapter_in,
             dpo_data_path=dpo_data,
             output_dir=output_dir + "_dpo",

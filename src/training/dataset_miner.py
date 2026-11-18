@@ -207,6 +207,170 @@ class DatasetMiner:
             [buggy_code, ac_code],
         )
 
+    def populate_codechef_challenges(
+        self,
+        json_path: Optional[str] = "data/codechef_raw.json",
+        limit: int = 50,
+        streaming: bool = False,
+    ) -> int:
+        """Mine and populate CodeChef challenges with AC solutions and failure-to-AC pairs."""
+        records = []
+        # Attempt to load local cached JSON if available
+        if json_path and os.path.exists(json_path) and not streaming:
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    records = json.load(f)
+            except Exception as e:
+                print(f"[DatasetMiner] Error reading local CodeChef JSON: {e}")
+
+        # If not enough records, fetch dynamically from Hugging Face
+        if len(records) < 5 and load_dataset is not None:
+            try:
+                print("[DatasetMiner] Fetching CodeChef dataset from Hugging Face...")
+                ds = load_dataset(
+                    "abanm/arjoonn-codechef-competitive-programming-ChatGPT4o",
+                    split="train",
+                    streaming=True,
+                )
+                for idx, row in enumerate(ds):
+                    conv = row.get("conversation", [])
+                    if len(conv) < 3:
+                        continue
+                    human_msg = conv[1]["value"]
+                    gpt_msg = conv[2]["value"]
+
+                    lines = [l.strip() for l in human_msg.split("\n") if l.strip()]
+                    title = lines[0] if lines else f"CodeChef Problem {idx+1}"
+                    if "All submissions" in title and len(lines) > 1:
+                        title = lines[1][:60]
+
+                    thought_m = re.search(r"<\|begin_of_thought\|>(.*?)<\|end_of_thought\|>", gpt_msg, re.DOTALL)
+                    thought = thought_m.group(1).strip() if thought_m else ""
+
+                    code_m = re.search(r"```(?:cpp|c\+\+|python|py)?\s*(.*?)\s*```", gpt_msg, re.DOTALL)
+                    code = code_m.group(1).strip() if code_m else ""
+
+                    if not code or len(code) < 20:
+                        continue
+
+                    is_cpp = "#include" in code or "int main" in code
+                    lang = "cpp" if is_cpp else "python"
+
+                    text_corpus = (title + " " + thought + " " + human_msg[:500]).lower()
+                    if "dynamic programming" in text_corpus or " dp " in text_corpus:
+                        paradigm = "dynamic_programming"
+                    elif "greedy" in text_corpus:
+                        paradigm = "greedy"
+                    elif "tree" in text_corpus or "graph" in text_corpus or "dfs" in text_corpus or "bfs" in text_corpus:
+                        paradigm = "graph_bfs_dfs"
+                    elif "binary search" in text_corpus:
+                        paradigm = "binary_search"
+                    elif "two pointer" in text_corpus:
+                        paradigm = "two_pointers"
+                    elif "modulo" in text_corpus or "prime" in text_corpus or "combinatorics" in text_corpus:
+                        paradigm = "math_number_theory"
+                    elif "bit" in text_corpus or "xor" in text_corpus:
+                        paradigm = "bitmask"
+                    elif "construct" in text_corpus:
+                        paradigm = "constructive"
+                    else:
+                        paradigm = "greedy"
+
+                    records.append(
+                        {
+                            "id": f"CC-{idx+1:04d}",
+                            "title": title,
+                            "description": human_msg[:1000],
+                            "thought": thought[:800],
+                            "code": code,
+                            "language": lang,
+                            "paradigm": paradigm,
+                        }
+                    )
+                    if len(records) >= limit:
+                        break
+            except Exception as e:
+                print(f"[DatasetMiner] Notice: Hugging Face live fetch encountered: {e}")
+
+        # Insert records into DuckDB schema
+        inserted = 0
+        for item in records[:limit]:
+            pid = item.get("id", f"CC-{inserted+1:04d}")
+            title = item.get("title", "CodeChef Challenge")
+            desc = item.get("description", "")
+            code = item.get("code", "")
+            lang = item.get("language", "python")
+            paradigm = item.get("paradigm", "greedy")
+
+            if not code or len(code) < 15:
+                continue
+
+            # Check if problem already exists
+            existing = self.con.execute("SELECT 1 FROM problems WHERE problem_id = ?", [pid]).fetchone()
+            if existing:
+                continue
+
+            rating = 1000 + (inserted * 60) % 900
+            self.con.execute(
+                """
+                INSERT INTO problems VALUES (?, 'CODECHEF', ?, ?, ?, ?, ?, 1500, 256, ?, '2023-01-01 12:00:00', 10)
+                """,
+                [
+                    pid,
+                    title,
+                    desc,
+                    "First line T. Test cases follow.",
+                    "Output answer for each test case.",
+                    "1 <= T <= 100, 1 <= N <= 2*10^5",
+                    rating,
+                ],
+            )
+
+            # Insert AC submission
+            sub_ac_id = f"sub_{pid.lower().replace('-', '_')}_ac"
+            self.con.execute(
+                """
+                INSERT INTO submissions VALUES (?, ?, ?, ?, 'AC', 35.0, 3200, '2023-01-01 12:20:00')
+                """,
+                [sub_ac_id, pid, code, lang],
+            )
+
+            # Synthesize realistic buggy submission (e.g. integer overflow, slow I/O, or off-by-one)
+            buggy_code = code
+            verdict = "WA"
+            if lang == "cpp":
+                if "long long" in buggy_code or "ll" in buggy_code:
+                    buggy_code = buggy_code.replace("long long", "int").replace("ll ", "int ")
+                elif "ios::sync_with_stdio(false);" in buggy_code:
+                    buggy_code = buggy_code.replace("ios::sync_with_stdio(false); cin.tie(nullptr);", "// slow I/O")
+                    verdict = "TLE"
+                else:
+                    buggy_code = buggy_code.replace("return 0;", "return 1;")
+                    verdict = "RE"
+            else:
+                # Python
+                if "sys.stdin.read" in buggy_code:
+                    buggy_code = buggy_code.replace("sys.stdin.read", "input")
+                    verdict = "TLE"
+                elif "range(len(" in buggy_code:
+                    buggy_code = buggy_code.replace("range(len(", "range(1, len(")
+                    verdict = "WA"
+                else:
+                    buggy_code = "# Buggy attempt\n" + buggy_code.replace("result", "res = 0\n    result")
+
+            if buggy_code != code:
+                sub_fail_id = f"sub_{pid.lower().replace('-', '_')}_fail"
+                self.con.execute(
+                    """
+                    INSERT INTO submissions VALUES (?, ?, ?, ?, ?, 115.0, 4800, '2023-01-01 12:05:00')
+                    """,
+                    [sub_fail_id, pid, buggy_code, lang, verdict],
+                )
+
+            inserted += 1
+
+        return inserted
+
     def mine_trajectories(self) -> List[Dict[str, Any]]:
         """
         Mine trajectory pairs (fail -> AC) with:
@@ -294,16 +458,72 @@ class DatasetMiner:
         for p in problems:
             pid, title, desc, constr, rating = p
 
-            # Node 1 Blueprint
+            # Infer paradigm from problem title and narrative
+            desc_lower = (title + " " + desc).lower()
+            if "dp" in desc_lower or "dynamic programming" in desc_lower or "subsequence" in desc_lower:
+                paradigm = "dynamic_programming"
+                time_comp = "O(N^2)"
+                ds = ["vector"]
+            elif "graph" in desc_lower or "tree" in desc_lower or "dfs" in desc_lower or "bfs" in desc_lower:
+                paradigm = "graph_bfs_dfs"
+                time_comp = "O(N + M)"
+                ds = ["vector", "queue"]
+            elif "bit" in desc_lower or "xor" in desc_lower or "binary" in desc_lower:
+                paradigm = "bitmask"
+                time_comp = "O(N)"
+                ds = ["vector"]
+            elif "shortest" in desc_lower or "dijkstra" in desc_lower:
+                paradigm = "shortest_path"
+                time_comp = "O(M log N)"
+                ds = ["priority_queue", "vector"]
+            elif "modulo" in desc_lower or "prime" in desc_lower or "combinatorics" in desc_lower:
+                paradigm = "math_number_theory"
+                time_comp = "O(N)"
+                ds = ["vector"]
+            elif "binary search" in desc_lower:
+                paradigm = "binary_search"
+                time_comp = "O(log N)"
+                ds = ["vector"]
+            elif "two pointer" in desc_lower:
+                paradigm = "two_pointers"
+                time_comp = "O(N)"
+                ds = ["vector"]
+            else:
+                paradigm = "greedy"
+                time_comp = "O(N log N)"
+                ds = ["vector"]
+
+            # Query real AC submission code for this problem
+            ac_sub = self.con.execute(
+                "SELECT code, language FROM submissions WHERE problem_id = ? AND verdict = 'AC' LIMIT 1",
+                [pid],
+            ).fetchone()
+            if ac_sub and ac_sub[0]:
+                ac_code = ac_sub[0]
+            else:
+                ac_code = (
+                    "#include <iostream>\n"
+                    "#include <vector>\n"
+                    "using namespace std;\n"
+                    "using ll = long long;\n"
+                    "int main() {\n"
+                    "    ios::sync_with_stdio(false);\n"
+                    "    cin.tie(nullptr);\n"
+                    "    cout << 0 << '\\n';\n"
+                    "    return 0;\n"
+                    "}\n"
+                )
+
+            # Node 1 Blueprint adhering strictly to grammars/planner.gbnf
             bp_json = {
                 "analysis": f"Optimal paradigm for {title} balancing time constraints",
-                "paradigm": "greedy" if "subarray" in desc.lower() else "shortest_path",
-                "data_structures": ["vector"],
-                "time_complexity": "O(N)",
-                "space_complexity": "O(1)",
+                "paradigm": paradigm,
+                "data_structures": ds,
+                "time_complexity": time_comp,
+                "space_complexity": "O(N)",
                 "use_int64": True,
                 "edge_cases": ["N=1", "extreme values"],
-                "steps": ["Initialize I/O", "Process elements", "Output result"],
+                "steps": ["Initialize I/O", "Process elements according to paradigm", "Output result"],
             }
             node1_records.append(
                 {
@@ -312,22 +532,11 @@ class DatasetMiner:
                 }
             )
 
-            # Node 2 Plan-to-Code
+            # Node 2 Plan-to-Code with real implementation
             node2_ptc_records.append(
                 {
                     "prompt": f"Problem: {desc}\nConstraints: {constr}\nBlueprint: {json.dumps(bp_json)}",
-                    "completion": (
-                        "#include <iostream>\n"
-                        "#include <vector>\n"
-                        "using namespace std;\n"
-                        "using ll = long long;\n"
-                        "int main() {\n"
-                        "    ios::sync_with_stdio(false);\n"
-                        "    cin.tie(nullptr);\n"
-                        "    cout << 0 << '\\n';\n"
-                        "    return 0;\n"
-                        "}\n"
-                    ),
+                    "completion": ac_code,
                 }
             )
 
