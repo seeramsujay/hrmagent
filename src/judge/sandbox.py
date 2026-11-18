@@ -126,52 +126,85 @@ class SandboxRunner:
                 wrapped_cmd = ["taskset", "-c", self.cpu_affinity_mask] + wrapped_cmd
             wrapped_cmd.extend(cmd)
 
+            max_output_bytes = 16 * 1024 * 1024  # 16 MB bound on total output
             start_wall = time.perf_counter()
+            ru_before = resource.getrusage(resource.RUSAGE_CHILDREN)
+            proc = None
             try:
                 proc = subprocess.Popen(
                     wrapped_cmd,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True,
+                    text=False,
                     cwd=str(cwd),
+                    start_new_session=True,
                 )
-                stdout_str, raw_stderr = proc.communicate(input=input_data, timeout=wall_limit_secs)
+                input_bytes = input_data.encode("utf-8") if isinstance(input_data, str) else input_data
+                raw_stdout_bytes, raw_stderr_bytes = proc.communicate(input=input_bytes, timeout=wall_limit_secs)
                 wall_clock_ms = (time.perf_counter() - start_wall) * 1000.0
                 exit_code = proc.returncode
+                ru_after = resource.getrusage(resource.RUSAGE_CHILDREN)
 
-                # Parse metrics from /usr/bin/time -v
+                # Check bounded output limit
+                if len(raw_stdout_bytes) + len(raw_stderr_bytes) > max_output_bytes:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                    return ExecutionTelemetry(
+                        verdict="RE",
+                        wall_clock_ms=round(wall_clock_ms, 2),
+                        cpu_time_ms=round(wall_clock_ms, 2),
+                        peak_rss_kb=0,
+                        exit_code=-1,
+                        stdout="",
+                        stderr="Output limit exceeded (exceeded 16MB budget)",
+                        sandbox_engine="setrlimit",
+                    )
+
+                stdout_str = raw_stdout_bytes.decode("utf-8", errors="replace")
+                raw_stderr = raw_stderr_bytes.decode("utf-8", errors="replace")
+
+                # Parse metrics from /usr/bin/time -v or collect from getrusage in prlimit-only path
                 peak_rss_kb = 0
                 user_time_sec = 0.0
                 sys_time_sec = 0.0
                 clean_stderr_lines = []
 
-                is_time_section = False
-                for line in raw_stderr.splitlines():
-                    if "Command being timed:" in line:
-                        is_time_section = True
-                        continue
-                    if is_time_section:
-                        if "Maximum resident set size" in line:
-                            try:
-                                peak_rss_kb = int(line.split(":")[-1].strip())
-                            except Exception:
-                                pass
-                        elif "User time" in line:
-                            try:
-                                user_time_sec = float(line.split(":")[-1].strip())
-                            except Exception:
-                                pass
-                        elif "System time" in line:
-                            try:
-                                sys_time_sec = float(line.split(":")[-1].strip())
-                            except Exception:
-                                pass
-                    else:
-                        clean_stderr_lines.append(line)
-
-                cpu_time_ms = (user_time_sec + sys_time_sec) * 1000.0
-                stderr_str = "\n".join(clean_stderr_lines)
+                if time_bin:
+                    is_time_section = False
+                    for line in raw_stderr.splitlines():
+                        if "Command being timed:" in line:
+                            is_time_section = True
+                            continue
+                        if is_time_section:
+                            if "Maximum resident set size" in line:
+                                try:
+                                    peak_rss_kb = int(line.split(":")[-1].strip())
+                                except Exception:
+                                    pass
+                            elif "User time" in line:
+                                try:
+                                    user_time_sec = float(line.split(":")[-1].strip())
+                                except Exception:
+                                    pass
+                            elif "System time" in line:
+                                try:
+                                    sys_time_sec = float(line.split(":")[-1].strip())
+                                except Exception:
+                                    pass
+                        else:
+                            clean_stderr_lines.append(line)
+                    cpu_time_ms = (user_time_sec + sys_time_sec) * 1000.0
+                    stderr_str = "\n".join(clean_stderr_lines)
+                else:
+                    # In prlimit-only mode without /usr/bin/time, compute resource metrics from rusage delta
+                    delta_utime = max(0.0, ru_after.ru_utime - ru_before.ru_utime)
+                    delta_stime = max(0.0, ru_after.ru_stime - ru_before.ru_stime)
+                    cpu_time_ms = (delta_utime + delta_stime) * 1000.0
+                    peak_rss_kb = ru_after.ru_maxrss
+                    stderr_str = raw_stderr
 
                 verdict: VerdictType = "AC"
                 if exit_code != 0:
@@ -214,7 +247,24 @@ class SandboxRunner:
                     sandbox_engine="setrlimit",
                 )
             except subprocess.TimeoutExpired:
-                proc.kill()
+                if proc is not None:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                    try:
+                        if proc.stdin:
+                            proc.stdin.close()
+                        if proc.stdout:
+                            proc.stdout.close()
+                        if proc.stderr:
+                            proc.stderr.close()
+                    except Exception:
+                        pass
+                    try:
+                        proc.wait(timeout=1.0)
+                    except Exception:
+                        pass
                 wall_clock_ms = (time.perf_counter() - start_wall) * 1000.0
                 return ExecutionTelemetry(
                     verdict="TLE",
@@ -334,7 +384,7 @@ class SandboxRunner:
             peak_rss_kb = rusage.ru_maxrss
 
         exit_code = 0
-        verdict: VerdictType = "AC"
+        verdict = "AC"
 
         if terminated:
             verdict = "TLE"
@@ -356,6 +406,12 @@ class SandboxRunner:
                 verdict = "RE"
         else:
             verdict = "RE"
+
+        if verdict == "AC":
+            if cpu_time_ms > time_limit_ms or wall_clock_ms > (time_limit_ms * 2.0):
+                verdict = "TLE"
+            elif peak_rss_kb > memory_limit_mb * 1024:
+                verdict = "MLE"
 
         return ExecutionTelemetry(
             verdict=verdict,
@@ -636,7 +692,7 @@ class SandboxRunner:
         expected_output: str,
         cwd: Path,
     ) -> bool:
-        """Run custom checker script. Checker receives files or stdin and exits 0 for AC."""
+        """Run custom checker script safely inside the isolated execution sandbox."""
         checker_file = cwd / "checker.py"
         checker_file.write_text(checker_code, encoding="utf-8")
 
@@ -657,7 +713,13 @@ class SandboxRunner:
             str(ans_file),
         ]
         try:
-            res = subprocess.run(cmd, capture_output=True, timeout=5.0, cwd=str(cwd))
-            return res.returncode == 0
+            telemetry = self._execute_with_wait4(
+                cmd=cmd,
+                input_data="",
+                time_limit_ms=3000,
+                memory_limit_mb=256,
+                cwd=cwd,
+            )
+            return telemetry.verdict == "AC" and telemetry.exit_code == 0
         except Exception:
             return False

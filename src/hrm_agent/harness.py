@@ -93,6 +93,7 @@ class HRMHarnessClient:
 def load_harness_problems(
     problems_path: str = "data/codechef_raw.json",
     limit: int = 5,
+    allow_synthetic: bool = True,
 ) -> list[ProblemSpec]:
     """Load benchmark problems from JSON or fall back to synthetic specimens."""
     specs: list[ProblemSpec] = []
@@ -104,6 +105,25 @@ def load_harness_problems(
                 data = json.load(f)
             if isinstance(data, list):
                 for item in data[:limit]:
+                    raw_in = item.get("sample_inputs")
+                    if raw_in is None:
+                        raw_in = item.get("sample_input", [])
+                    if isinstance(raw_in, str):
+                        raw_in = [raw_in]
+                    elif not isinstance(raw_in, list):
+                        raw_in = []
+
+                    raw_out = item.get("sample_outputs")
+                    if raw_out is None:
+                        raw_out = item.get("sample_output", [])
+                    if isinstance(raw_out, str):
+                        raw_out = [raw_out]
+                    elif not isinstance(raw_out, list):
+                        raw_out = []
+
+                    time_limit = int(item.get("time_limit_ms") or item.get("time_limit") or 2000)
+                    memory_limit = int(item.get("memory_limit_mb") or item.get("memory_limit") or 256)
+
                     spec = ProblemSpec(
                         id=str(item.get("id", item.get("problem_id", f"PROB-{len(specs) + 1}"))),
                         title=str(item.get("title", "")),
@@ -111,36 +131,50 @@ def load_harness_problems(
                         input_format=str(item.get("input_format", "")),
                         output_format=str(item.get("output_format", "")),
                         constraints=str(item.get("constraints", "")),
-                        sample_inputs=item.get("sample_inputs", item.get("sample_input", [])),
-                        sample_outputs=item.get("sample_outputs", item.get("sample_output", [])),
+                        sample_inputs=raw_in,
+                        sample_outputs=raw_out,
                         rating=item.get("rating"),
+                        time_limit_ms=time_limit,
+                        memory_limit_mb=memory_limit,
                     )
                     specs.append(spec)
         except Exception as e:
             console.print(f"[yellow]Warning: Could not parse {problems_path}: {e}[/yellow]")
 
     if not specs:
-        # Fallback synthetic specimens
+        if not allow_synthetic:
+            raise FileNotFoundError(
+                f"Requested problem corpus at '{problems_path}' not found or contains no valid problems."
+            )
+        console.print(
+            f"[yellow]Corpus at '{problems_path}' was unavailable or empty. "
+            "Loading explicitly marked synthetic specimens for demonstration mode.[/yellow]"
+        )
+        # Fallback synthetic specimens explicitly tagged
         specs = [
             ProblemSpec(
                 id="HARNESS-SYNTH-1",
-                title="Number Mirror",
+                title="Number Mirror (Synthetic Benchmark Specimen)",
                 description="Read a single integer N and output it.",
                 input_format="Single integer N",
                 output_format="Single integer N",
                 constraints="0 <= N <= 10^5",
                 sample_inputs=["123\n"],
                 sample_outputs=["123\n"],
+                time_limit_ms=2000,
+                memory_limit_mb=256,
             ),
             ProblemSpec(
                 id="HARNESS-SYNTH-2",
-                title="Sum of Digits",
+                title="Sum of Digits (Synthetic Benchmark Specimen)",
                 description="Given integer T, followed by T integers, output sum of digits for each.",
                 input_format="T, then integers.",
                 output_format="Sum of digits.",
                 constraints="1 <= T <= 100",
                 sample_inputs=["2\n12345\n312\n"],
                 sample_outputs=["15\n6\n"],
+                time_limit_ms=2000,
+                memory_limit_mb=256,
             ),
         ]
     return specs[:limit]
@@ -170,7 +204,7 @@ def run_benchmark_harness(
         raise
 
     models = client.list_models()
-    model_ids = [m.get("id") for m in models]
+    model_ids = [str(m.get("id", "")) for m in models]
     console.print(f"[cyan]Available Harness Models: {', '.join(model_ids)}[/cyan]")
 
     # 2. Test OpenAI Chat Completion Protocol
@@ -263,6 +297,8 @@ def run_benchmark_harness(
     report = {
         "timestamp": time.time(),
         "server_url": server_url,
+        "corpus_file": problems_file,
+        "corpus_type": "file" if Path(problems_file).exists() else "synthetic_demonstration",
         "language": language,
         "total_problems": len(problems),
         "solved_count": solved_count,

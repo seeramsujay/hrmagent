@@ -9,12 +9,15 @@ Exposes:
 - Health, GPU telemetry, and model status (/health, /).
 """
 
+import json
 import time
 import uuid
-from typing import Any, Literal
+from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from hrm_agent.hrm_loop import HRMAgentLoop
@@ -149,10 +152,11 @@ class ServerState:
                     mock_fallback=False,
                 )
             except Exception as e:
-                # Fallback to mock with warning if models are unavailable
-                print(f"[HRM Server Warning] Could not initialize DualPairEngine: {e}. Falling back to MockLLMEngine.")
-                self.mock_engine = MockLLMEngine()
-                self.mode = "mock_fallback"
+                # Strictly fail startup if real model fails to load without explicit mock mode
+                raise RuntimeError(
+                    f"Failed to load DualPairEngine (mode={mode}, role1={role1_path}, role2={role2_path}): {e}. "
+                    "Aborting startup. Pass mode='mock' explicitly if mock inference is intended."
+                ) from e
 
     def get_engines(self) -> tuple[LLMEngine, LLMEngine, LLMEngine]:
         """Return (planner, coder, critic) engines."""
@@ -173,10 +177,22 @@ def create_app(
     role1_path: str = "outputs/merged/role1_architect_critic",
     role2_path: str = "outputs/merged/role2_coder_patcher",
 ) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        if not hasattr(app.state, "server_state") or app.state.server_state is None:
+            app.state.server_state = ServerState(
+                mode=mode,
+                role1_path=role1_path,
+                role2_path=role2_path,
+                device=device,
+            )
+        yield
+
     app = FastAPI(
         title="HRM Competitive Programming Agent Server",
         description="Local-First Dual-Pair HRM Agent API with OpenAI harness compatibility",
         version="0.1.0",
+        lifespan=lifespan,
     )
 
     app.add_middleware(
@@ -187,16 +203,29 @@ def create_app(
         allow_headers=["*"],
     )
 
-    state = ServerState(
-        mode=mode,
-        role1_path=role1_path,
-        role2_path=role2_path,
-        device=device,
-    )
-    app.state.server_state = state
+    def get_state() -> ServerState:
+        if not hasattr(app.state, "server_state") or app.state.server_state is None:
+            app.state.server_state = ServerState(
+                mode=mode,
+                role1_path=role1_path,
+                role2_path=role2_path,
+                device=device,
+            )
+        return app.state.server_state
+
+    def _validate_spec_checker(spec: ProblemSpec) -> None:
+        """Reject dangerous untrusted checker code at entry boundary."""
+        if spec.checker_code:
+            forbidden = ["os.system", "subprocess", "socket", "shutil.rmtree", "__import__('os')", "open("]
+            if any(tok in spec.checker_code for tok in forbidden):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Security violation: dangerous operations in checker_code are forbidden.",
+                )
 
     @app.get("/")
     def root():
+        state = get_state()
         return {
             "service": "hrm-agent-server",
             "version": "0.1.0",
@@ -214,6 +243,7 @@ def create_app(
 
     @app.get("/health")
     def health():
+        state = get_state()
         cuda_avail = False
         gpu_name = None
         vram_allocated_mb = 0.0
@@ -255,27 +285,30 @@ def create_app(
         ]
         return ModelListResponse(data=models)
 
-    @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
+    @app.post("/v1/chat/completions")
     def chat_completions(req: ChatCompletionRequest):
+        state = get_state()
         planner, coder, critic = state.get_engines()
 
-        # Combine messages into prompt
-        system_content = ""
-        user_content = ""
+        # Serialize complete ordered dialogue history
+        system_content = "You are an algorithmic architect and critic."
+        dialogue_turns = []
+        user_queries = []
         for m in req.messages:
             if m.role == "system":
                 system_content = m.content
-            elif m.role == "user":
-                user_content = m.content
+            else:
+                dialogue_turns.append(f"<|im_start|>{m.role}\n{m.content}\n<|im_end|>")
+                if m.role == "user":
+                    user_queries.append(m.content)
+
+        full_history = "\n".join(dialogue_turns)
+        user_content = "\n\n".join(user_queries) if user_queries else (req.messages[-1].content if req.messages else "")
 
         # Model routing
         model_name = req.model.lower()
         if "architect" in model_name or "critic" in model_name:
-            prompt = (
-                f"<|im_start|>system\n{system_content or 'You are an algorithmic architect and critic.'}\n<|im_end|>\n"
-                f"<|im_start|>user\n{user_content}\n<|im_end|>\n"
-                "<|im_start|>assistant\n"
-            )
+            prompt = f"<|im_start|>system\n{system_content}\n<|im_end|>\n{full_history}\n<|im_start|>assistant\n"
             text, telem = planner.generate(
                 prompt=prompt,
                 max_tokens=req.max_tokens,
@@ -285,7 +318,7 @@ def create_app(
         elif "coder" in model_name or "patcher" in model_name:
             prompt = (
                 f"<|im_start|>system\n{system_content or 'You are a fast code synthesis engine.'}\n<|im_end|>\n"
-                f"<|im_start|>user\n{user_content}\n<|im_end|>\n"
+                f"{full_history}\n"
                 "<|im_start|>assistant\n"
             )
             text, telem = coder.generate(
@@ -302,7 +335,7 @@ def create_app(
                 "Output an algorithmic blueprint strictly adhering to the JSON schema. "
                 "Keep the blueprint dense, precise, and under 250 tokens. Never write full source code.\n"
                 "<|im_end|>\n"
-                f"<|im_start|>user\n{user_content}\n<|im_end|>\n"
+                f"{full_history}\n"
                 "<|im_start|>assistant\n"
             )
             bp_text, bp_telem = planner.generate(prompt=bp_prompt, max_tokens=300, temperature=0.2)
@@ -325,6 +358,29 @@ def create_app(
             telem.prompt_tokens += bp_telem.prompt_tokens
             telem.completion_tokens += bp_telem.completion_tokens
 
+        if req.stream:
+            # Return SSE stream compliant with OpenAI API
+            def sse_generator():
+                chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+                created_ts = int(time.time())
+                chunk_data = {
+                    "id": chunk_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": req.model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"role": "assistant", "content": text},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(sse_generator(), media_type="text/event-stream")
+
         return ChatCompletionResponse(
             id=f"chatcmpl-{uuid.uuid4().hex[:12]}",
             created=int(time.time()),
@@ -345,6 +401,7 @@ def create_app(
 
     @app.post("/v1/completions", response_model=CompletionResponse)
     def completions(req: CompletionRequest):
+        state = get_state()
         planner, coder, critic = state.get_engines()
         chosen = coder if "coder" in req.model.lower() else planner
         text, telem = chosen.generate(
@@ -368,6 +425,8 @@ def create_app(
     @app.post("/solve", response_model=AgentTrace)
     @app.post("/v1/solve", response_model=AgentTrace)
     def solve(spec: ProblemSpec, language: Literal["cpp", "python"] = "python"):
+        _validate_spec_checker(spec)
+        state = get_state()
         planner, coder, critic = state.get_engines()
         loop = HRMAgentLoop(
             node1_planner=planner,
@@ -385,6 +444,10 @@ def create_app(
     @app.post("/evaluate", response_model=EvaluateResponse)
     @app.post("/v1/evaluate", response_model=EvaluateResponse)
     def evaluate(eval_req: EvaluateRequest):
+        for p in eval_req.problems:
+            _validate_spec_checker(p)
+
+        state = get_state()
         planner, coder, critic = state.get_engines()
         loop = HRMAgentLoop(
             node1_planner=planner,
@@ -425,4 +488,4 @@ def create_app(
     return app
 
 
-app = create_app()
+app = create_app(mode="mock")

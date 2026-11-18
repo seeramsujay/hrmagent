@@ -42,7 +42,7 @@ class FuzzCaseGenerator:
     def generate_boundary_cases(cls, spec: ProblemSpec) -> list[str]:
         """Generate minimum boundary and edge cases (e.g. N=1, zeros, extremes)."""
         cases = []
-        _bounds = cls.extract_bounds(spec.constraints)
+        cls.extract_bounds(spec.constraints)
 
         # Case 1: Minimal N=1
         cases.append("1\n1\n0\n")

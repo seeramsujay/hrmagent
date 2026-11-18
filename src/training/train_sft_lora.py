@@ -123,16 +123,34 @@ def train_sft(
         labels_list = []
         attention_mask_list = []
 
+        min_completion_len = 32
+        max_prompt_len = max(64, max_seq_len - min_completion_len)
+
         for p, c in zip(prompts, completions):
-            prompt_enc = tokenizer(p + "\n", truncation=True, max_length=max_seq_len, padding=False)
-            prompt_len = len(prompt_enc["input_ids"])
-            full_enc = tokenizer(p + "\n" + c, truncation=True, max_length=max_seq_len, padding=False)
-            input_ids = full_enc["input_ids"]
-            attn_mask = full_enc["attention_mask"]
-            labels = list(input_ids)
-            # Mask prompt tokens with -100 so loss is computed exclusively on the target completion
-            for i in range(min(prompt_len, len(labels))):
-                labels[i] = -100
+            # Reserve capacity for completion to guarantee supervised tokens
+            prompt_enc = tokenizer(p + "\n", truncation=True, max_length=max_prompt_len, padding=False)
+            prompt_ids = prompt_enc["input_ids"]
+            comp_enc = tokenizer(c, truncation=True, max_length=max_seq_len - len(prompt_ids), padding=False)
+            comp_ids = comp_enc["input_ids"]
+
+            # If completion is completely empty, provide at least the eos token
+            if not comp_ids:
+                comp_ids = [tokenizer.eos_token_id or 0]
+
+            input_ids = prompt_ids + comp_ids
+            attn_mask = [1] * len(input_ids)
+            labels = [-100] * len(prompt_ids) + list(comp_ids)
+
+            # Ensure truncation to max_seq_len and at least one supervised completion token
+            if len(input_ids) > max_seq_len:
+                input_ids = input_ids[:max_seq_len]
+                attn_mask = attn_mask[:max_seq_len]
+                labels = labels[:max_seq_len]
+
+            # Guarantee at least one valid label
+            if not any(lbl != -100 for lbl in labels):
+                labels[-1] = input_ids[-1]
+
             input_ids_list.append(input_ids)
             labels_list.append(labels)
             attention_mask_list.append(attn_mask)
@@ -234,15 +252,23 @@ def train_dpo(
         max_length=2048,
     )
 
+    import inspect
+
+    dpo_kwargs = {
+        "model": model,
+        "ref_model": None,
+        "args": dpo_config,
+        "train_dataset": dpo_dataset,
+    }
+    sig = inspect.signature(DPOTrainer.__init__)
+    if "processing_class" in sig.parameters:
+        dpo_kwargs["processing_class"] = tokenizer
+    else:
+        dpo_kwargs["tokenizer"] = tokenizer
+
     # When ref_model=None, DPOTrainer disables adapter during ref forward pass
     # saving ~3-4 GB VRAM and fitting easily in 6-10 GB VRAM!
-    trainer = DPOTrainer(
-        model=model,
-        ref_model=None,
-        args=dpo_config,
-        train_dataset=dpo_dataset,
-        processing_class=tokenizer,
-    )
+    trainer = DPOTrainer(**dpo_kwargs)
 
     print("[HRM DPO] Starting adapter-disabled reference DPO training...")
     trainer.train()

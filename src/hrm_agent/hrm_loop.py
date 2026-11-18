@@ -7,6 +7,7 @@ Supports asymmetric test-time scaling, unified-diff patching, and structured JSO
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -146,21 +147,14 @@ class HRMAgentLoop:
             max_tokens=1024,
             temperature=temp,
         )
-        # Strip extraneous markdown backticks or fences if leaked
+        # Strip extraneous markdown backticks or fences only if they occur at line boundaries
         clean_code = raw_code.strip()
-        if "```" in clean_code:
-            parts = clean_code.split("```")
-            if len(parts) >= 3:
-                code_block = parts[1]
-                lines = code_block.splitlines()
-                if lines and lines[0].strip().lower() in ["cpp", "c++", "python", "py"]:
-                    clean_code = "\n".join(lines[1:])
-                else:
-                    clean_code = code_block
-            elif clean_code.startswith("```"):
-                clean_code = clean_code.split("\n", 1)[1]
-        if clean_code.endswith("```"):
-            clean_code = clean_code.rsplit("\n", 1)[0]
+        fence_match = re.search(r"```(?:[a-zA-Z0-9_+-]+)?\n([\s\S]*?)\n```", clean_code)
+        if fence_match:
+            clean_code = fence_match.group(1).strip()
+        else:
+            clean_code = re.sub(r"^```(?:[a-zA-Z0-9_+-]+)?\n", "", clean_code)
+            clean_code = re.sub(r"\n```\s*$", "", clean_code)
         return clean_code.strip(), telem
 
     def _run_coder_error_to_diff(
@@ -188,13 +182,12 @@ class HRMAgentLoop:
             temperature=0.3,
         )
         clean_diff = diff_text.strip()
-        if "```" in clean_diff:
-            parts = clean_diff.split("```")
-            if len(parts) >= 3:
-                clean_diff = parts[1]
-                lines = clean_diff.splitlines()
-                if lines and lines[0].strip().lower() in ["diff", "udiff", "patch"]:
-                    clean_diff = "\n".join(lines[1:])
+        fence_match = re.search(r"```(?:diff|patch|udiff)?\n([\s\S]*?)\n```", clean_diff)
+        if fence_match:
+            clean_diff = fence_match.group(1).strip()
+        else:
+            clean_diff = re.sub(r"^```(?:diff|patch|udiff)?\n", "", clean_diff)
+            clean_diff = re.sub(r"\n```\s*$", "", clean_diff)
         return clean_diff.strip(), telem
 
     def _run_critic(

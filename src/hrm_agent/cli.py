@@ -11,6 +11,7 @@ Provides commands:
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 import typer
 import yaml
@@ -48,7 +49,7 @@ def mine_data(
     seed_synthetic: bool = typer.Option(True, help="Seed synthetic problems and trajectories"),
     include_codechef: bool = typer.Option(True, help="Include CodeChef competitive programming challenges"),
     include_game_theory: bool = typer.Option(True, help="Include Game Theory competitive programming challenges"),
-    codechef_json: str | None = typer.Option(
+    codechef_json: Optional[str] = typer.Option(
         "data/codechef_raw.json", help="Path to local or cached CodeChef JSON file"
     ),
 ):
@@ -90,12 +91,12 @@ def mine_data(
 def train_lora(
     config_path: str = typer.Option("configs/training.yaml", help="Path to training config"),
     mode: str = typer.Option("sft", help="Training mode: 'sft' or 'dpo'"),
-    train_data: str | None = typer.Option(None, help="Path to training jsonl"),
-    base_model: str | None = typer.Option(None, help="Base model identifier or path"),
+    train_data: Optional[str] = typer.Option(None, help="Path to training jsonl"),
+    base_model: Optional[str] = typer.Option(None, help="Base model identifier or path"),
     output_dir: str = typer.Option("outputs/checkpoints", help="Output directory"),
-    epochs: int | None = typer.Option(None, help="Number of training epochs"),
-    grad_accum: int | None = typer.Option(None, help="Gradient accumulation steps"),
-    learning_rate: float | None = typer.Option(None, help="Learning rate override"),
+    epochs: Optional[int] = typer.Option(None, help="Number of training epochs"),
+    grad_accum: Optional[int] = typer.Option(None, help="Gradient accumulation steps"),
+    learning_rate: Optional[float] = typer.Option(None, help="Learning rate override"),
 ):
     """Train bf16 LoRA adapter on single GPU with adamw_8bit and chunked CE."""
     console.print(Panel.fit(f"[bold magenta]HRM LoRA Training — Mode: {mode.upper()}[/bold magenta]"))
@@ -363,15 +364,18 @@ def serve(
     )
     import uvicorn
 
-    from hrm_agent.server import create_app
+    if reload:
+        uvicorn.run("hrm_agent.server:app", host=host, port=port, reload=True)
+    else:
+        from hrm_agent.server import create_app
 
-    server_app = create_app(
-        mode=mode,
-        device=device,
-        role1_path=role1_path,
-        role2_path=role2_path,
-    )
-    uvicorn.run(server_app, host=host, port=port, reload=reload)
+        server_app = create_app(
+            mode=mode,
+            device=device,
+            role1_path=role1_path,
+            role2_path=role2_path,
+        )
+        uvicorn.run(server_app, host=host, port=port, reload=False)
 
 
 @app.command("harness")

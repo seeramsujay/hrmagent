@@ -3,7 +3,8 @@
 Implements:
 1. Temporal cutoff anchored to open-r1/codeforces test split (min(contest_start)) + 8-gram decontamination
 2. Curriculum filter (rating BETWEEN 800 AND 1900, >= 5 test cases, excluding >= 2200 Grandmaster overhang)
-3. CodeChef extraction from deepmind/code_contests (source == CODECHEF) & streaming nvidia/Nemotron-Competitive-Programming-v1
+3. CodeChef extraction from deepmind/code_contests (source == CODECHEF)
+   & streaming nvidia/Nemotron-Competitive-Programming-v1
 4. Author-free trajectory miner over open-r1/codeforces-submissions Parquet:
    - Comment stripping & lexical tokenization
    - 0 < dt <= 3600s, Jaccard >= 0.60, diff <= 60 lines
@@ -106,8 +107,7 @@ class DatasetMiner:
 
     def _init_duckdb_schema(self) -> None:
         """Initialize relational schema for problems, submissions, and trajectories."""
-        self.con.execute(
-            """
+        self.con.execute("""
             CREATE TABLE problems (
                 problem_id VARCHAR PRIMARY KEY,
                 source VARCHAR,
@@ -132,14 +132,12 @@ class DatasetMiner:
                 peak_rss_kb INTEGER,
                 submitted_at TIMESTAMP
             );
-            """
-        )
+            """)
 
     def populate_synthetic_seed(self) -> None:
         """Seed high-quality synthetic problems and trajectory pairs for offline operation."""
         # Problem 1: Subarray Sum Bounds (Rating 1100)
-        self.con.execute(
-            """
+        self.con.execute("""
             INSERT INTO problems VALUES (
                 'CF-1001A', 'CODEFORCES', 'Subarray Sum Bounds',
                 'Given an array of N integers, find maximum subarray sum.',
@@ -148,11 +146,9 @@ class DatasetMiner:
                 '1 <= N <= 2*10^5, -10^9 <= A[i] <= 10^9',
                 1000, 256, 1100, '2023-01-01 12:00:00', 10
             )
-            """
-        )
+            """)
         # Problem 2: Chef and Minimum Path (CodeChef Rating 1400)
-        self.con.execute(
-            """
+        self.con.execute("""
             INSERT INTO problems VALUES (
                 'CHEF-PATH01', 'CODECHEF', 'Chef and Minimum Path',
                 'Find shortest weighted path on a DAG.',
@@ -161,8 +157,7 @@ class DatasetMiner:
                 '1 <= N <= 10^5, 1 <= M <= 2*10^5, 1 <= W <= 10^9',
                 1500, 256, 1400, '2023-02-15 14:00:00', 12
             )
-            """
-        )
+            """)
         # Submissions for CF-1001A (Buggy 32-bit overflow -> AC long long fix)
         buggy_code = (
             "#include <iostream>\n"
@@ -295,8 +290,8 @@ class DatasetMiner:
                         {
                             "id": f"CC-{idx + 1:04d}",
                             "title": title,
-                            "description": human_msg[:1000],
-                            "thought": thought[:800],
+                            "description": human_msg,
+                            "thought": thought,
                             "code": code,
                             "language": lang,
                             "paradigm": paradigm,
@@ -382,7 +377,8 @@ class DatasetMiner:
                     buggy_code = buggy_code.replace("range(len(", "range(1, len(")
                     verdict = "WA"
                 else:
-                    buggy_code = "# Buggy attempt\n" + buggy_code.replace("result", "res = 0\n    result")
+                    if "result" in buggy_code:
+                        buggy_code = "# Buggy attempt\n" + buggy_code.replace("result", "res = 0\n    result")
 
             if buggy_code != code:
                 sub_fail_id = f"sub_{pid.lower().replace('-', '_')}_fail"
@@ -609,8 +605,8 @@ class DatasetMiner:
                 "source": "CODECHEF",
                 "title": "Classic Multi-Pile Nim",
                 "description": (
-                    "Given N piles of stones, players alternate removing any positive number of stones from a single pile. "
-                    "The player to take the last stone wins. First player moves first. Determine winner."
+                    "Given N piles of stones, players alternate removing any positive number of stones from a single "
+                    "pile. The player to take the last stone wins. First player moves first. Determine winner."
                 ),
                 "input_format": "T test cases. Each has N, then array A of heap sizes.",
                 "output_format": "Output 'First' or 'Second' per test case.",
@@ -657,8 +653,9 @@ class DatasetMiner:
                 "source": "CODEFORCES",
                 "title": "Coin Row Minimax Game",
                 "description": (
-                    "Given an array of N integers, players take turns picking a number from either the left or right end. "
-                    "Each player plays to maximize their score minus opponent's score. Output first player score difference."
+                    "Given an array of N integers, players take turns picking a number from either the left or right "
+                    "end. Each player plays to maximize their score minus opponent's score. Output first player score "
+                    "difference."
                 ),
                 "input_format": "N followed by N integers.",
                 "output_format": "Maximum score difference.",
@@ -706,7 +703,7 @@ class DatasetMiner:
 
         count = 0
         for item in gt_problems:
-            pid = item["id"]
+            pid = str(item["id"])
             existing = self.con.execute("SELECT 1 FROM problems WHERE problem_id = ?", [pid]).fetchone()
             if existing:
                 continue
@@ -756,8 +753,7 @@ class DatasetMiner:
         - Unified diff line count <= 60 lines
         - Telemetry improvement or error resolution
         """
-        rows = self.con.execute(
-            """
+        rows = self.con.execute("""
             SELECT s1.submission_id AS fail_id, s1.code AS fail_code, s1.verdict AS fail_verdict,
                    s1.cpu_time_ms AS fail_ms, s1.peak_rss_kb AS fail_kb, s1.submitted_at AS fail_time,
                    s2.submission_id AS ac_id, s2.code AS ac_code, s2.verdict AS ac_verdict,
@@ -767,8 +763,7 @@ class DatasetMiner:
             JOIN submissions s2 ON s1.problem_id = s2.problem_id
             WHERE s1.verdict != 'AC' AND s2.verdict = 'AC'
               AND s2.submitted_at > s1.submitted_at
-            """
-        ).fetchall()
+            """).fetchall()
 
         trajectories = []
         for r in rows:
@@ -848,6 +843,18 @@ class DatasetMiner:
                 paradigm = "game_theory"
                 time_comp = "O(1)"
                 ds = ["vector"]
+            elif "shortest" in desc_lower or "dijkstra" in desc_lower:
+                paradigm = "shortest_path"
+                time_comp = "O(M log N)"
+                ds = ["priority_queue", "vector"]
+            elif "binary search" in desc_lower or "bisect" in desc_lower:
+                paradigm = "binary_search"
+                time_comp = "O(log N)"
+                ds = ["vector"]
+            elif "two pointer" in desc_lower:
+                paradigm = "two_pointers"
+                time_comp = "O(N)"
+                ds = ["vector"]
             elif "dp" in desc_lower or "dynamic programming" in desc_lower or "subsequence" in desc_lower:
                 paradigm = "dynamic_programming"
                 time_comp = "O(N^2)"
@@ -856,24 +863,12 @@ class DatasetMiner:
                 paradigm = "graph_bfs_dfs"
                 time_comp = "O(N + M)"
                 ds = ["vector", "queue"]
-            elif "bit" in desc_lower or "xor" in desc_lower or "binary" in desc_lower:
-                paradigm = "bitmask"
-                time_comp = "O(N)"
-                ds = ["vector"]
-            elif "shortest" in desc_lower or "dijkstra" in desc_lower:
-                paradigm = "shortest_path"
-                time_comp = "O(M log N)"
-                ds = ["priority_queue", "vector"]
             elif "modulo" in desc_lower or "prime" in desc_lower or "combinatorics" in desc_lower:
                 paradigm = "math_number_theory"
                 time_comp = "O(N)"
                 ds = ["vector"]
-            elif "binary search" in desc_lower:
-                paradigm = "binary_search"
-                time_comp = "O(log N)"
-                ds = ["vector"]
-            elif "two pointer" in desc_lower:
-                paradigm = "two_pointers"
+            elif "bit" in desc_lower or "xor" in desc_lower:
+                paradigm = "bitmask"
                 time_comp = "O(N)"
                 ds = ["vector"]
             else:
@@ -952,14 +947,16 @@ class DatasetMiner:
             # Node 3 Critic: BUG / OPTIMIZE
             node3_records.append(
                 {
-                    "prompt": f"Review code with verdict {traj['fail_verdict']} at {traj['fail_ms']}ms:\n{traj['fail_code']}",
+                    "prompt": (
+                        f"Review code with verdict {traj['fail_verdict']} at {traj['fail_ms']}ms:\n{traj['fail_code']}"
+                    ),
                     "completion": json.dumps(
                         {
                             "analysis": f"Detected {traj['fail_verdict']} failure due to type overflow or bottleneck",
                             "status": "BUG" if traj["fail_verdict"] == "WA" else "OPTIMIZE",
-                            "bottleneck_class": "integer_overflow"
-                            if traj["fail_verdict"] == "WA"
-                            else "asymptotic_time",
+                            "bottleneck_class": (
+                                "integer_overflow" if traj["fail_verdict"] == "WA" else "asymptotic_time"
+                            ),
                             "escalate_to_planner": False,
                             "target_lines": "L8-L15",
                             "patch_directive": "Cast accumulators to 64-bit int and check constraints",

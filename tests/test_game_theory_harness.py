@@ -207,7 +207,9 @@ def test_game_theory_critic_diagnosis_and_patch():
     )
 
     critic_feedback = {
-        "analysis": "Naive recursive win(x) has exponential O(2^N) complexity. Must use O(1) modulo parity: n % 3 != 0.",
+        "analysis": (
+            "Naive recursive win(x) has exponential O(2^N) complexity. Must use O(1) modulo parity: n % 3 != 0."
+        ),
         "status": "BUG",
         "bottleneck_class": "asymptotic_time",
         "escalate_to_planner": False,

@@ -9,6 +9,7 @@ Enforces:
 - Option A (three resident models) & Option B (hybrid resident 0.5B + shared 1.5B multi-LoRA)
 """
 
+import hashlib
 import json
 import os
 import time
@@ -126,7 +127,7 @@ class LlamaCppEngine(LLMEngine):
             self._grammar_cache[grammar_path] = compiled
             return compiled
         elif grammar_text:
-            cache_key = hash(grammar_text)
+            cache_key = f"sha256:{hashlib.sha256(grammar_text.encode('utf-8')).hexdigest()}"
             if cache_key in self._grammar_cache:
                 return self._grammar_cache[cache_key]
             compiled = self.llama_cpp.LlamaGrammar.from_string(grammar_text)
@@ -310,7 +311,11 @@ class MockLLMEngine(LLMEngine):
                     "+    cin >> a >> b;\n"
                     "     return 0;\n"
                 )
-            elif (grammar_path and "py_raw" in grammar_path) or "python" in prompt.lower():
+            elif (
+                (grammar_path and "py_raw" in grammar_path)
+                or "into optimal python 3" in prompt.lower()
+                or "# language: python" in prompt.lower()
+            ):
                 text = (
                     "import sys\n"
                     "def solve():\n"
@@ -394,7 +399,7 @@ class TransformersEngine(LLMEngine):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
-            dtype=self.dtype,
+            torch_dtype=self.dtype,
             device_map=self.device,
             trust_remote_code=True,
         )

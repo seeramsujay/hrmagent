@@ -1,6 +1,6 @@
 ---
 VALIDATE_ALL_CODEBASE: false
-FILTER_REGEX_EXCLUDE: (data/|outputs/|grammars/)
+FILTER_REGEX_EXCLUDE: (data/|outputs/|grammars/|examples/)
 DISABLE:
   - COPYPASTE
   - SPELL
@@ -8,6 +8,9 @@ DISABLE_LINTERS:
   - PYTHON_MYPY
   - PYTHON_PYRIGHT
   - YAML_PRETTIER
+  - JSON_PRETTIER
+  - JSON_BIOME
+  - BIOME_FORMAT
   - ACTION_ZIZMOR
 YAML_YAMLLINT_FILTER_REGEX_EXCLUDE: (.github/workflows)
 YAML_V8R_FILTER_REGEX_EXCLUDE: (.github/workflows)
