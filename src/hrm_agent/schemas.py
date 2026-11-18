@@ -20,6 +20,7 @@ ParadigmType = Literal[
     "divide_and_conquer",
     "flow_matching",
     "brute_force_backtrack",
+    "game_theory",
 ]
 
 VerdictType = Literal["AC", "WA", "TLE", "MLE", "RE", "CE", "UNKNOWN"]

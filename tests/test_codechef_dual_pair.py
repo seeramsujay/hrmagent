@@ -70,6 +70,7 @@ def test_dual_pair_balanced_datasets(tmp_path):
             "divide_and_conquer",
             "flow_matching",
             "brute_force_backtrack",
+            "game_theory",
         ]
         assert bp.time_complexity.startswith("O(")
 

@@ -47,6 +47,7 @@ def mine_data(
     gm_cutoff: int = typer.Option(2200, help="Upper Grandmaster cutoff"),
     seed_synthetic: bool = typer.Option(True, help="Seed synthetic problems and trajectories"),
     include_codechef: bool = typer.Option(True, help="Include CodeChef competitive programming challenges"),
+    include_game_theory: bool = typer.Option(True, help="Include Game Theory competitive programming challenges"),
     codechef_json: str | None = typer.Option(
         "data/codechef_raw.json", help="Path to local or cached CodeChef JSON file"
     ),
@@ -68,6 +69,11 @@ def mine_data(
         console.print("[green]Mining CodeChef challenges into DuckDB...[/green]")
         cc_count = miner.populate_codechef_challenges(json_path=codechef_json)
         console.print(f"[bold cyan]Successfully integrated {cc_count} CodeChef challenges![/bold cyan]")
+
+    if include_game_theory:
+        console.print("[green]Mining Game Theory challenges (Sprague-Grundy, Nim, Subtraction games)...[/green]")
+        gt_count = miner.populate_game_theory_challenges()
+        console.print(f"[bold cyan]Successfully integrated {gt_count} Game Theory challenges![/bold cyan]")
 
     paths = miner.build_balanced_datasets()
     table = Table(title="Generated Balanced Datasets")
