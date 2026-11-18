@@ -13,4 +13,6 @@ models/loras/
 outputs/checkpoints/
 outputs/checkpoints_dpo/
 outputs/checkpoints_grpo/
+outputs/checkpoints_architect_critic/
+outputs/checkpoints*
 data/curated/*.parquet

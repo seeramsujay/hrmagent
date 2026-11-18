@@ -186,6 +186,9 @@ def train_dpo(
     adapter_path: str,
     dpo_data_path: str,
     output_dir: str = "outputs/checkpoints_dpo",
+    epochs: Optional[int] = None,
+    learning_rate: Optional[float] = None,
+    grad_accum: Optional[int] = None,
 ) -> str:
     """Run DPO training using PEFT adapter-disabled reference model (no duplicate weights in VRAM)."""
     try:
@@ -211,27 +214,32 @@ def train_dpo(
 
     dpo_dataset = load_dataset("json", data_files=dpo_data_path, split="train")
 
+    ep = epochs if epochs is not None else 2
+    lr = learning_rate if learning_rate is not None else 5e-5
+    ga = grad_accum if grad_accum is not None else 4
+
     dpo_config = DPOConfig(
         output_dir=output_dir,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=16,
-        num_train_epochs=2,
-        learning_rate=5e-5,
+        gradient_accumulation_steps=ga,
+        num_train_epochs=ep,
+        learning_rate=lr,
         bf16=use_bf16,
         optim="adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
         gradient_checkpointing=True,
-        logging_steps=10,
+        logging_steps=1,
+        save_strategy="epoch",
+        max_length=2048,
     )
 
     # When ref_model=None, DPOTrainer disables adapter during ref forward pass
-    # saving ~3-4 GB VRAM and fitting easily in 10 GB VRAM!
+    # saving ~3-4 GB VRAM and fitting easily in 6-10 GB VRAM!
     trainer = DPOTrainer(
         model=model,
         ref_model=None,
         args=dpo_config,
         train_dataset=dpo_dataset,
-        tokenizer=tokenizer,
-        max_length=2048,
+        processing_class=tokenizer,
     )
 
     print("[HRM DPO] Starting adapter-disabled reference DPO training...")
@@ -239,4 +247,6 @@ def train_dpo(
 
     final_dpo_path = os.path.join(output_dir, "final_dpo_adapter")
     model.save_pretrained(final_dpo_path)
+    tokenizer.save_pretrained(final_dpo_path)
+    print(f"[HRM DPO] Saved DPO adapter to {final_dpo_path}")
     return final_dpo_path

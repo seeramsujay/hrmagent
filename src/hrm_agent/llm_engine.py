@@ -311,6 +311,20 @@ class MockLLMEngine(LLMEngine):
                     '+    cin >> a >> b;\n'
                     '     return 0;\n'
                 )
+            elif (grammar_path and "py_raw" in grammar_path) or "python" in prompt.lower():
+                text = (
+                    "import sys\n"
+                    "def solve():\n"
+                    "    lines = sys.stdin.read().splitlines()\n"
+                    "    if not lines:\n"
+                    "        return\n"
+                    "    t = int(lines[0])\n"
+                    "    for i in range(1, t + 1):\n"
+                    "        nums = sorted(map(int, lines[i].split()))\n"
+                    "        print(nums[-2] if len(nums) >= 2 else nums[0])\n"
+                    "if __name__ == '__main__':\n"
+                    "    solve()\n"
+                )
             else:
                 # Default C++20 raw program
                 text = (

@@ -127,6 +127,9 @@ def train_lora(
             adapter_path=adapter_in,
             dpo_data_path=dpo_data,
             output_dir=output_dir + "_dpo",
+            epochs=epochs,
+            learning_rate=learning_rate,
+            grad_accum=grad_accum,
         )
         console.print(f"[bold green]DPO training complete. Adapter at {final_dpo}[/bold green]")
 
