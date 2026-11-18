@@ -352,6 +352,7 @@ def serve(
     role1_path: str = typer.Option("outputs/merged/role1_architect_critic", help="Path to Role 1 merged model"),
     role2_path: str = typer.Option("outputs/merged/role2_coder_patcher", help="Path to Role 2 merged model"),
     reload: bool = typer.Option(False, help="Enable auto-reload for development"),
+    api_key: Optional[str] = typer.Option(None, help="Optional API key for Bearer authentication"),
 ):
     """Launch the localhost HRM Agent server with OpenAI and closed-loop endpoints."""
     console.print(
@@ -374,6 +375,7 @@ def serve(
             device=device,
             role1_path=role1_path,
             role2_path=role2_path,
+            api_key=api_key,
         )
         uvicorn.run(server_app, host=host, port=port, reload=False)
 

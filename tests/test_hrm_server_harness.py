@@ -225,3 +225,47 @@ def test_harness_client_integration():
     )
     solve = client.solve_problem(spec, language="python")
     assert solve["problem_id"] == "CLIENT-01"
+
+
+def test_server_openapi_and_api_key():
+    """Verify OpenAPI spec and API key authentication mechanism."""
+    # 1. Unrestricted open localhost server (default)
+    app = create_app(mode="mock")
+    client = TestClient(app)
+
+    # OpenAPI schema is generated and valid
+    openapi_resp = client.get("/openapi.json")
+    assert openapi_resp.status_code == 200
+    spec = openapi_resp.json()
+    assert spec["info"]["title"] == "HRM Competitive Programming Agent Server"
+    assert "/v1/chat/completions" in spec["paths"]
+
+    # API key info endpoint
+    key_resp = client.get("/v1/api_key")
+    assert key_resp.status_code == 200
+    key_info = key_resp.json()
+    assert key_info["default_key"] == "sk-hrm-localhost"
+    assert key_info["api_key_required"] is False
+
+    # Standard harness query with dummy bearer key works
+    req = {
+        "model": "hrm-dual-pair",
+        "messages": [{"role": "user", "content": "hello"}],
+    }
+    resp = client.post("/v1/chat/completions", json=req, headers={"Authorization": "Bearer sk-dummy-harness-key"})
+    assert resp.status_code == 200
+
+    # 2. Server with enforced API key
+    auth_app = create_app(mode="mock", api_key="sk-secret-token")
+    auth_client = TestClient(auth_app)
+
+    # Missing / invalid key is rejected with 401
+    bad_resp = auth_client.post("/v1/chat/completions", json=req)
+    assert bad_resp.status_code == 401
+
+    wrong_key_resp = auth_client.post("/v1/chat/completions", json=req, headers={"Authorization": "Bearer wrong-key"})
+    assert wrong_key_resp.status_code == 401
+
+    # Valid key succeeds
+    good_resp = auth_client.post("/v1/chat/completions", json=req, headers={"Authorization": "Bearer sk-secret-token"})
+    assert good_resp.status_code == 200

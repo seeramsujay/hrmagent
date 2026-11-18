@@ -10,15 +10,16 @@ Exposes:
 """
 
 import json
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Literal
+from typing import Any, AsyncGenerator, Literal, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from hrm_agent.hrm_loop import HRMAgentLoop
 from hrm_agent.llm_engine import (
@@ -35,17 +36,25 @@ from judge.sandbox import SandboxRunner
 
 
 class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     role: str
-    content: str
+    content: Any = ""
+    name: Optional[str] = None
 
 
 class ChatCompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     model: str = "hrm-dual-pair"
     messages: list[ChatMessage]
     temperature: float = 0.2
     top_p: float = 0.95
-    max_tokens: int = 1024
+    max_tokens: Optional[int] = 1024
     stream: bool = False
+    stop: Optional[list[str] | str] = None
+    n: int = 1
+    presence_penalty: float = 0.0
+    frequency_penalty: float = 0.0
+    user: Optional[str] = None
 
 
 class ChatChoice(BaseModel):
@@ -70,6 +79,7 @@ class ChatCompletionResponse(BaseModel):
 
 
 class CompletionRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     prompt: str
     model: str = "hrm-dual-pair"
     max_tokens: int = 512
@@ -131,9 +141,11 @@ class ServerState:
         role1_adapter: str | None = "outputs/checkpoints_architect_critic/final_adapter",
         role2_adapter: str | None = "outputs/checkpoints_dpo/final_dpo_adapter",
         device: str = "auto",
+        api_key: str | None = None,
     ):
         self.mode = mode
         self.device = device
+        self.api_key = api_key or os.environ.get("HRM_API_KEY")
         self.dual_pair: DualPairEngine | None = None
         self.mock_engine: MockLLMEngine | None = None
         self.sandbox = SandboxRunner()
@@ -158,6 +170,17 @@ class ServerState:
                     "Aborting startup. Pass mode='mock' explicitly if mock inference is intended."
                 ) from e
 
+    def verify_api_key(self, authorization: str | None) -> bool:
+        """Verify API key from Authorization header if a key is enforced."""
+        if not self.api_key:
+            return True  # Open localhost access for standard harnesses
+        if not authorization:
+            return False
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1] == self.api_key
+        return authorization == self.api_key
+
     def get_engines(self) -> tuple[LLMEngine, LLMEngine, LLMEngine]:
         """Return (planner, coder, critic) engines."""
         if self.mock_engine is not None:
@@ -176,6 +199,7 @@ def create_app(
     device: str = "auto",
     role1_path: str = "outputs/merged/role1_architect_critic",
     role2_path: str = "outputs/merged/role2_coder_patcher",
+    api_key: str | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -185,6 +209,7 @@ def create_app(
                 role1_path=role1_path,
                 role2_path=role2_path,
                 device=device,
+                api_key=api_key,
             )
         yield
 
@@ -210,6 +235,7 @@ def create_app(
                 role1_path=role1_path,
                 role2_path=role2_path,
                 device=device,
+                api_key=api_key,
             )
         return app.state.server_state
 
@@ -231,14 +257,33 @@ def create_app(
             "version": "0.1.0",
             "status": "ready",
             "mode": state.mode,
+            "openapi": "/openapi.json",
+            "docs": "/docs",
+            "api_key_status": (
+                "enforced" if state.api_key else "open_localhost (any key accepted, e.g. sk-hrm-localhost)"
+            ),
             "endpoints": [
                 "/v1/chat/completions",
                 "/v1/completions",
                 "/v1/models",
+                "/v1/api_key",
                 "/solve",
                 "/evaluate",
                 "/health",
             ],
+        }
+
+    @app.get("/v1/api_key")
+    def get_api_key():
+        state = get_state()
+        return {
+            "api_key_required": state.api_key is not None,
+            "default_key": state.api_key or "sk-hrm-localhost",
+            "header": "Authorization: Bearer <key>",
+            "openapi_url": "/openapi.json",
+            "docs_url": "/docs",
+            "models": ["hrm-dual-pair", "hrm-architect-critic", "hrm-coder-patcher"],
+            "base_url": "http://localhost:8000/v1",
         }
 
     @app.get("/health")
@@ -286,8 +331,12 @@ def create_app(
         return ModelListResponse(data=models)
 
     @app.post("/v1/chat/completions")
-    def chat_completions(req: ChatCompletionRequest):
+    def chat_completions(req: ChatCompletionRequest, request: Request):
         state = get_state()
+        auth = request.headers.get("Authorization")
+        if not state.verify_api_key(auth):
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid API key")
+
         planner, coder, critic = state.get_engines()
 
         # Serialize complete ordered dialogue history
@@ -295,15 +344,26 @@ def create_app(
         dialogue_turns = []
         user_queries = []
         for m in req.messages:
+            msg_text = ""
+            if isinstance(m.content, str):
+                msg_text = m.content
+            elif isinstance(m.content, list):
+                parts = [str(item.get("text", "")) for item in m.content if isinstance(item, dict) and "text" in item]
+                msg_text = "\n".join(parts) if parts else str(m.content)
+            elif m.content is not None:
+                msg_text = str(m.content)
+
             if m.role == "system":
-                system_content = m.content
+                system_content = msg_text
             else:
-                dialogue_turns.append(f"<|im_start|>{m.role}\n{m.content}\n<|im_end|>")
+                dialogue_turns.append(f"<|im_start|>{m.role}\n{msg_text}\n<|im_end|>")
                 if m.role == "user":
-                    user_queries.append(m.content)
+                    user_queries.append(msg_text)
 
         full_history = "\n".join(dialogue_turns)
-        user_content = "\n\n".join(user_queries) if user_queries else (req.messages[-1].content if req.messages else "")
+        user_content = (
+            "\n\n".join(user_queries) if user_queries else (str(req.messages[-1].content) if req.messages else "")
+        )
 
         # Model routing
         model_name = req.model.lower()
@@ -400,8 +460,12 @@ def create_app(
         )
 
     @app.post("/v1/completions", response_model=CompletionResponse)
-    def completions(req: CompletionRequest):
+    def completions(req: CompletionRequest, request: Request):
         state = get_state()
+        auth = request.headers.get("Authorization")
+        if not state.verify_api_key(auth):
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid API key")
+
         planner, coder, critic = state.get_engines()
         chosen = coder if "coder" in req.model.lower() else planner
         text, telem = chosen.generate(
@@ -424,9 +488,13 @@ def create_app(
 
     @app.post("/solve", response_model=AgentTrace)
     @app.post("/v1/solve", response_model=AgentTrace)
-    def solve(spec: ProblemSpec, language: Literal["cpp", "python"] = "python"):
+    def solve(spec: ProblemSpec, request: Request, language: Literal["cpp", "python"] = "python"):
         _validate_spec_checker(spec)
         state = get_state()
+        auth = request.headers.get("Authorization")
+        if not state.verify_api_key(auth):
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid API key")
+
         planner, coder, critic = state.get_engines()
         loop = HRMAgentLoop(
             node1_planner=planner,
@@ -443,11 +511,15 @@ def create_app(
 
     @app.post("/evaluate", response_model=EvaluateResponse)
     @app.post("/v1/evaluate", response_model=EvaluateResponse)
-    def evaluate(eval_req: EvaluateRequest):
+    def evaluate(eval_req: EvaluateRequest, request: Request):
+        state = get_state()
+        auth = request.headers.get("Authorization")
+        if not state.verify_api_key(auth):
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid API key")
+
         for p in eval_req.problems:
             _validate_spec_checker(p)
 
-        state = get_state()
         planner, coder, critic = state.get_engines()
         loop = HRMAgentLoop(
             node1_planner=planner,
