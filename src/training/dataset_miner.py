@@ -60,6 +60,10 @@ def compute_jaccard(tokens_a: list[str], tokens_b: list[str]) -> float:
 
 def generate_diff(old_code: str, new_code: str, filename: str = "solution.cpp") -> str:
     """Generate a standard unified diff between two code strings."""
+    if old_code and not old_code.endswith("\n"):
+        old_code += "\n"
+    if new_code and not new_code.endswith("\n"):
+        new_code += "\n"
     old_lines = old_code.splitlines(keepends=True)
     new_lines = new_code.splitlines(keepends=True)
     diff = difflib.unified_diff(
