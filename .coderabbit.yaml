@@ -1,0 +1,31 @@
+---
+language: en-US
+early_access: false
+reviews:
+  profile: chill
+  high_level_summary: true
+  poem: false
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+  path_filters:
+    - "!data/**"
+    - "!outputs/**"
+    - "!grammars/**"
+  path_instructions:
+    - path: "src/judge/sandbox.py"
+      instructions: |
+        Scrutinize sandbox isolation, resource limits, and timeout handling.
+        Flag any path that can escape the sandbox or leave child processes.
+    - path: "src/hrm_agent/patcher.py"
+      instructions: |
+        Check unified-diff parsing for off-by-one errors and unsafe writes.
+    - path: "src/hrm_agent/llm_engine.py"
+      instructions: |
+        Verify GBNF grammar caching and q8_0 KV-cache configuration.
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: "Use Conventional Commits (feat:, fix:, chore:)."
