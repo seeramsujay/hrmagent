@@ -269,3 +269,27 @@ def test_server_openapi_and_api_key():
     # Valid key succeeds
     good_resp = auth_client.post("/v1/chat/completions", json=req, headers={"Authorization": "Bearer sk-secret-token"})
     assert good_resp.status_code == 200
+
+
+def test_server_four_model_solve_endpoint():
+    """Verify server exposes /v1/4m/solve endpoint for complete 4-tier pipeline."""
+    app = create_app(mode="mock")
+    client = TestClient(app)
+
+    spec = {
+        "id": "SERVER-4M-FLOW017",
+        "title": "Second Largest",
+        "description": "Three numbers A, B, C are given. Return the second largest.",
+        "constraints": "1 <= T <= 10",
+        "sample_inputs": ["1\n10 40 25\n"],
+        "sample_outputs": ["25\n"],
+    }
+
+    resp = client.post("/v1/4m/solve?language=python", json=spec)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["problem_id"] == "SERVER-4M-FLOW017"
+    assert data["solved"] is True
+    assert data["final_verdict"] == "AC"
+    assert "latent_invariant" in data
+    assert "def solve():" in data["synthesized_code"]

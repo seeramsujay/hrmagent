@@ -557,6 +557,35 @@ def create_app(
             results=results,
         )
 
+    @app.post("/v1/4m/solve")
+    def four_model_solve(
+        spec: ProblemSpec,
+        request: Request,
+        language: Literal["python", "cpp", "typescript", "kotlin"] = "python",
+    ):
+        """Execute full 4-Model Hierarchical Reasoning Architecture (HRM -> Supervisor -> Coder -> Verifier)."""
+        _validate_spec_checker(spec)
+        state = get_state()
+        auth = request.headers.get("Authorization")
+        if not state.verify_api_key(auth):
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid API key")
+
+        from hrm_agent.four_model_agent import FourModelAgent
+
+        agent = FourModelAgent(sandbox=state.sandbox, device=state.device)
+        trace = agent.solve(spec, language=language)  # type: ignore
+        return {
+            "problem_id": trace.problem_id,
+            "solved": trace.solved,
+            "final_verdict": trace.final_verdict,
+            "latent_invariant": trace.latent_invariant,
+            "blueprint": trace.blueprint.model_dump() if trace.blueprint else None,
+            "synthesized_code": trace.synthesized_code,
+            "repair_iterations": trace.repair_iterations,
+            "patches_applied": trace.patches_applied,
+            "language": trace.language,
+        }
+
     return app
 
 

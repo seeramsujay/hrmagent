@@ -452,5 +452,45 @@ def run_terminal_bench(
     )
 
 
+@app.command("4m-train-latent")
+def cli_train_hrm_latent(
+    output_dir: str = typer.Option("outputs/checkpoints_hrm_latent", help="Destination for trained weights"),
+    epochs: int = typer.Option(5, help="Number of training epochs"),
+    device: str = typer.Option("auto", help="Compute device ('auto', 'cuda', 'cpu')"),
+):
+    """Train Sapient-style HRM Latent Reasoner on 10k+ stars code and algorithmic invariants."""
+    from training.train_hrm_latent import train_hrm_latent
+
+    saved_file = train_hrm_latent(output_dir=output_dir, epochs=epochs, device=device)
+    console.print(f"[bold green]HRM Latent Model successfully saved to {saved_file}[/bold green]")
+
+
+@app.command("4m-solve")
+def cli_four_model_solve(
+    problem_file: str = typer.Option(..., help="Path to JSON file containing ProblemSpec"),
+    language: str = typer.Option("python", help="Target language ('python', 'cpp', 'typescript', 'kotlin')"),
+    device: str = typer.Option("auto", help="Compute device ('auto', 'cuda', 'cpu')"),
+):
+    """Execute complete 4-Model Hierarchical Reasoning Pipeline (HRM -> Supervisor -> Coder -> Verifier)."""
+    console.print(Panel.fit("[bold magenta]Executing 4-Model Hierarchical Reasoning Agent[/bold magenta]"))
+    from hrm_agent.four_model_agent import FourModelAgent
+    from hrm_agent.schemas import ProblemSpec
+
+    with open(problem_file, "r", encoding="utf-8") as f:
+        spec_dict = json.load(f)
+    spec = ProblemSpec.model_validate(spec_dict)
+
+    agent = FourModelAgent(device=device)
+    trace = agent.solve(spec, language=language)  # type: ignore
+
+    status_color = "green" if trace.solved else "red"
+    console.print(f"[{status_color}]Verdict: {trace.final_verdict} (Solved: {trace.solved})[/{status_color}]")
+    console.print(f"[cyan]Latent Invariant:[/cyan] {trace.latent_invariant.get('invariant')}")
+    console.print(f"[cyan]Latent Steps:[/cyan] {trace.latent_invariant.get('latent_steps')}")
+    if trace.synthesized_code:
+        console.print("[dim]Synthesized Code:[/dim]")
+        console.print(trace.synthesized_code[:300] + "...")
+
+
 if __name__ == "__main__":
     app()
