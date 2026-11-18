@@ -23,8 +23,9 @@ from hrm_agent.hrm_latent_engine import HRMLatentConfig, HRMLatentReasoner
 def load_training_corpus(
     production_code_path: str = "data/curated/production_code_10k_stars.jsonl",
     blueprints_path: str = "data/curated/node1_blueprints.jsonl",
+    codechef_raw_path: str = "data/codechef_raw.json",
 ) -> list[dict[str, Any]]:
-    """Load combined dataset of 10k+ stars production code invariants and CP blueprints."""
+    """Load combined dataset of 10k+ stars production code invariants, CP blueprints, and CodeChef problems."""
     samples: list[dict[str, Any]] = []
 
     # 1. Load 10k+ stars production code
@@ -54,6 +55,28 @@ def load_training_corpus(
                             "target_invariant": completion[:256],
                         }
                     )
+
+    # 3. Load CodeChef problems and their algorithmic thought invariants
+    if os.path.exists(codechef_raw_path):
+        with open(codechef_raw_path, "r", encoding="utf-8") as f:
+            try:
+                cc_items = json.load(f)
+                for item in cc_items:
+                    title = item.get("title", "")
+                    desc = item.get("description", "")
+                    thought = item.get("thought", "")
+                    paradigm = item.get("paradigm", "greedy")
+                    target = (
+                        thought[:256] if thought else f"Paradigm: {paradigm}. Optimal invariant and state transitions."
+                    )
+                    samples.append(
+                        {
+                            "input_text": f"CodeChef: {title}\n{desc[:200]}",
+                            "target_invariant": target,
+                        }
+                    )
+            except Exception:
+                pass
 
     return samples
 

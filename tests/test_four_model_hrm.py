@@ -88,3 +88,16 @@ def test_four_model_agent_game_theory_solve(tmp_path):
     assert trace.latent_invariant["paradigm"] == "game_theory"
     assert "ALICE" in trace.synthesized_code
     assert "BOB" in trace.synthesized_code
+
+
+def test_four_model_vs_baseline_comparison(tmp_path):
+    """Verify side-by-side comparative benchmark execution between Baseline and HRM-4M."""
+    from judge.compare_4m_vs_baseline import run_comparison
+
+    out_file = tmp_path / "comp_report.json"
+    summary = run_comparison(output_path=str(out_file))
+
+    assert summary["total_problems"] == 10
+    assert summary["hrm_4m_ac_count"] == 10
+    assert summary["hrm_4m_pass_rate_pct"] == 100.0
+    assert out_file.exists()

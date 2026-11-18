@@ -2,14 +2,14 @@
   "total_tasks": 5,
   "passed_tasks": 5,
   "pass_rate_pct": 100.0,
-  "total_wall_clock_ms": 297.06,
+  "total_wall_clock_ms": 296.4,
   "results": [
     {
       "task_id": "TB-01-LOG-METRICS",
       "category": "log_diagnostics",
       "passed": true,
       "exit_code": 0,
-      "wall_clock_ms": 14.65,
+      "wall_clock_ms": 13.87,
       "error": null
     },
     {
@@ -17,7 +17,7 @@
       "category": "code_patching",
       "passed": true,
       "exit_code": 0,
-      "wall_clock_ms": 10.55,
+      "wall_clock_ms": 11.77,
       "error": null
     },
     {
@@ -25,7 +25,7 @@
       "category": "build_compilation",
       "passed": true,
       "exit_code": 0,
-      "wall_clock_ms": 237.82,
+      "wall_clock_ms": 235.87,
       "error": null
     },
     {
@@ -33,7 +33,7 @@
       "category": "bash_scripting",
       "passed": true,
       "exit_code": 0,
-      "wall_clock_ms": 3.73,
+      "wall_clock_ms": 4.27,
       "error": null
     },
     {
@@ -41,7 +41,7 @@
       "category": "test_repair",
       "passed": true,
       "exit_code": 0,
-      "wall_clock_ms": 30.31,
+      "wall_clock_ms": 30.62,
       "error": null
     }
   ]

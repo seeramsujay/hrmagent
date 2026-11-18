@@ -428,3 +428,8 @@ class TerminalBenchEvaluator:
                 json.dump(summary, f, indent=2)
 
         return summary
+
+
+if __name__ == "__main__":
+    runner = TerminalBenchEvaluator()
+    runner.evaluate_all(output_report_path="outputs/terminal_bench_report.json")
