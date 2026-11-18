@@ -1,0 +1,48 @@
+{
+  "total_tasks": 5,
+  "passed_tasks": 5,
+  "pass_rate_pct": 100.0,
+  "total_wall_clock_ms": 297.06,
+  "results": [
+    {
+      "task_id": "TB-01-LOG-METRICS",
+      "category": "log_diagnostics",
+      "passed": true,
+      "exit_code": 0,
+      "wall_clock_ms": 14.65,
+      "error": null
+    },
+    {
+      "task_id": "TB-02-BINARY-SEARCH-PATCH",
+      "category": "code_patching",
+      "passed": true,
+      "exit_code": 0,
+      "wall_clock_ms": 10.55,
+      "error": null
+    },
+    {
+      "task_id": "TB-03-CPP-INT64-OVERFLOW",
+      "category": "build_compilation",
+      "passed": true,
+      "exit_code": 0,
+      "wall_clock_ms": 237.82,
+      "error": null
+    },
+    {
+      "task_id": "TB-04-RECURSIVE-YAML-REFACTOR",
+      "category": "bash_scripting",
+      "passed": true,
+      "exit_code": 0,
+      "wall_clock_ms": 3.73,
+      "error": null
+    },
+    {
+      "task_id": "TB-05-UNITTEST-DIAGNOSTIC-REPAIR",
+      "category": "test_repair",
+      "passed": true,
+      "exit_code": 0,
+      "wall_clock_ms": 30.31,
+      "error": null
+    }
+  ]
+}

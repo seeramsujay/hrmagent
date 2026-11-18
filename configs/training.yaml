@@ -1,8 +1,21 @@
-# Training Configuration for RTX 3080 (10 GB VRAM) bf16 LoRA Training
+# Training Configuration for RTX 3080 (10 GB VRAM) / RTX 4050 (6 GB VRAM) bf16 LoRA Training
 model:
   planner_base: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
-  coder_base: "Qwen/Qwen2.5-Coder-0.5B-Instruct"
-  critic_base: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+  coder_base: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+  critic_base: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+  fallback_coder_base: "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+  linear_attention_base: "Qwen/Qwen3.5-0.8B"
+  python_specialist_base: "Maincode/Maincoder-1B"
+
+supervisor_worker:
+  default_worker: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+  reasoning_worker: "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+  linear_attention_worker: "Qwen/Qwen3.5-0.8B"
+  quantization: "Q8_0"  # High precision Q8_0 or BF16 (<1.6 GB VRAM)
+  thinking_budget_tokens: 1024
+  action_mode: "code_action"  # smolagents style python code-action instead of nested JSON blobs
+  diff_mode: "search_replace" # SEARCH / REPLACE blocks over fragile line offsets
+  max_prompt_tokens: 8000     # Pass file slices, not whole repos
 
 lora:
   r: 32

@@ -94,6 +94,7 @@ def train_lora(
     train_data: Optional[str] = typer.Option(None, help="Path to training jsonl"),
     base_model: Optional[str] = typer.Option(None, help="Base model identifier or path"),
     output_dir: str = typer.Option("outputs/checkpoints", help="Output directory"),
+    adapter_path: Optional[str] = typer.Option(None, help="Input adapter path for DPO training"),
     epochs: Optional[int] = typer.Option(None, help="Number of training epochs"),
     grad_accum: Optional[int] = typer.Option(None, help="Gradient accumulation steps"),
     learning_rate: Optional[float] = typer.Option(None, help="Learning rate override"),
@@ -118,7 +119,7 @@ def train_lora(
 
     if mode == "sft":
         data_file = train_data or "data/curated/node2_plan_to_code.jsonl"
-        adapter_path = train_sft(
+        saved_adapter = train_sft(
             base_model_name_or_path=chosen_base,
             train_data_path=data_file,
             output_dir=output_dir,
@@ -127,15 +128,31 @@ def train_lora(
             learning_rate=learning_rate,
             grad_accum=grad_accum,
         )
-        console.print(f"[bold green]LoRA SFT training complete. Adapter at {adapter_path}[/bold green]")
+        console.print(f"[bold green]LoRA SFT training complete. Adapter at {saved_adapter}[/bold green]")
     elif mode == "dpo":
         dpo_data = train_data or "data/curated/node2_dpo.jsonl"
-        adapter_in = os.path.join(output_dir, "final_adapter")
+        # Resolve input SFT adapter path
+        resolved_adapter = adapter_path
+        if not resolved_adapter:
+            candidate_paths = [
+                os.path.join(output_dir, "final_adapter"),
+                "outputs/checkpoints_plan_to_code/final_adapter",
+                "outputs/checkpoints/final_adapter",
+                "outputs/checkpoints_architect_critic/final_adapter",
+            ]
+            for cp in candidate_paths:
+                if os.path.exists(cp):
+                    resolved_adapter = cp
+                    break
+        if not resolved_adapter or not os.path.exists(resolved_adapter):
+            raise FileNotFoundError("Cannot find input adapter for DPO training. Specify --adapter-path explicitly.")
+
+        dpo_out = output_dir if output_dir != "outputs/checkpoints" else "outputs/checkpoints_dpo"
         final_dpo = train_dpo(
             base_model_name_or_path=chosen_base,
-            adapter_path=adapter_in,
+            adapter_path=resolved_adapter,
             dpo_data_path=dpo_data,
-            output_dir=output_dir + "_dpo",
+            output_dir=dpo_out,
             epochs=epochs,
             learning_rate=learning_rate,
             grad_accum=grad_accum,
@@ -417,6 +434,22 @@ def merge_adapters(
     console.print(f"[cyan]Role 2 (Fast Coder & Patcher): {role2_adapter} -> {role2_output}[/cyan]")
     m2 = merge_peft_adapter(base_model, role2_adapter, role2_output)
     console.print(f"[bold green]Role 2 merged successfully at {m2}[/bold green]")
+
+
+@app.command("terminalbench")
+def run_terminal_bench(
+    report_path: str = typer.Option("outputs/terminal_bench_report.json", help="Path to save benchmark report JSON"),
+):
+    """Run agentic TerminalBench diagnostics & execution benchmark suite."""
+    console.print(Panel.fit("[bold magenta]Running TerminalBench Benchmark Suite[/bold magenta]"))
+    from judge.terminal_bench import TerminalBenchEvaluator
+
+    evaluator = TerminalBenchEvaluator()
+    summary = evaluator.evaluate_all(output_report_path=report_path)
+    console.print(
+        f"[bold green]TerminalBench Complete! Pass Rate: {summary['pass_rate_pct']}% "
+        f"({summary['passed_tasks']}/{summary['total_tasks']})[/bold green]"
+    )
 
 
 if __name__ == "__main__":

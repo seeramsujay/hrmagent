@@ -149,13 +149,88 @@ def validate_syntax_balance(code: str, language: str = "cpp") -> tuple[bool, str
     return True, None
 
 
-def apply_patch(original_code: str, raw_diff: str, language: str = "cpp") -> tuple[bool, str, UnifiedDiffPatch]:
+def parse_search_replace_blocks(text: str) -> list[tuple[str, str]]:
+    """Parse SEARCH / REPLACE blocks from text.
+
+    Format:
+    <<<<<<< SEARCH
+    old_code
+    =======
+    new_code
+    >>>>>>> REPLACE
     """
-    Apply a unified diff to original_code with strict offset and fuzzy fallback.
+    pattern = re.compile(
+        r"<{5,9}\s*SEARCH\s*\n(.*?)\n={5,9}\s*\n(.*?)\n>{5,9}\s*REPLACE",
+        re.DOTALL,
+    )
+    return pattern.findall(text)
+
+
+def apply_search_replace_patch(
+    original_code: str, raw_diff: str, language: str = "cpp"
+) -> tuple[bool, str, UnifiedDiffPatch]:
+    """Apply SEARCH/REPLACE diff blocks to original code without fragile line offsets."""
+    blocks = parse_search_replace_blocks(raw_diff)
+    patch_meta = UnifiedDiffPatch(
+        raw_diff=raw_diff,
+        source_file="solution",
+        target_file="solution",
+        hunks_count=len(blocks),
+        applied_cleanly=False,
+    )
+    if not blocks:
+        patch_meta.validation_error = "No SEARCH/REPLACE blocks found in patch text"
+        return False, original_code, patch_meta
+
+    result = original_code
+    all_clean = True
+
+    for search_chunk, replace_chunk in blocks:
+        # 1. Exact match
+        if search_chunk in result:
+            result = result.replace(search_chunk, replace_chunk, 1)
+            continue
+
+        # 2. Trimmed / line-by-line whitespace match
+        search_lines = [line.strip() for line in search_chunk.strip().splitlines() if line.strip()]
+        if not search_lines:
+            continue
+
+        code_lines = result.splitlines()
+        found_idx = -1
+        for i in range(len(code_lines) - len(search_lines) + 1):
+            cand = [line.strip() for line in code_lines[i : i + len(search_lines)] if line.strip()]
+            if cand == search_lines:
+                found_idx = i
+                break
+
+        if found_idx != -1:
+            all_clean = False
+            before = code_lines[:found_idx]
+            after = code_lines[found_idx + len(search_lines) :]
+            result = "\n".join(before + [replace_chunk] + after)
+        else:
+            patch_meta.validation_error = f"SEARCH block not found in source: {search_chunk[:60]}..."
+            return False, original_code, patch_meta
+
+    syntax_ok, syntax_err = validate_syntax_balance(result, language)
+    if not syntax_ok:
+        patch_meta.validation_error = f"Syntax validation failed after patch: {syntax_err}"
+        return False, original_code, patch_meta
+
+    patch_meta.applied_cleanly = all_clean
+    return True, result, patch_meta
+
+
+def apply_patch(original_code: str, raw_diff: str, language: str = "cpp") -> tuple[bool, str, UnifiedDiffPatch]:
+    """Apply a unified diff or SEARCH/REPLACE block to original_code with strict and fuzzy fallback.
 
     Returns:
         (success, patched_code, patch_metadata)
     """
+    if "<<<<<<< SEARCH" in raw_diff or ("=======" in raw_diff and ">>>>>>> REPLACE" in raw_diff):
+        return apply_search_replace_patch(original_code, raw_diff, language)
+
     src_file, tgt_file, hunks = parse_unified_diff(raw_diff)
     patch_meta = UnifiedDiffPatch(
         raw_diff=raw_diff,
