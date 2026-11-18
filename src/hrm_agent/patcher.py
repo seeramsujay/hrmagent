@@ -4,12 +4,19 @@ Supports strict line-offset matching with fuzzy hunk fallback and syntax validat
 """
 
 import re
-from typing import List, Tuple, Optional
+
 from hrm_agent.schemas import UnifiedDiffPatch
 
 
 class Hunk:
-    def __init__(self, old_start: int, old_len: int, new_start: int, new_len: int, lines: List[str]):
+    def __init__(
+        self,
+        old_start: int,
+        old_len: int,
+        new_start: int,
+        new_len: int,
+        lines: list[str],
+    ):
         self.old_start = old_start
         self.old_len = old_len
         self.new_start = new_start
@@ -17,21 +24,21 @@ class Hunk:
         self.lines = lines  # Lines including prefix ' ', '+', '-'
 
     @property
-    def old_slice(self) -> List[str]:
+    def old_slice(self) -> list[str]:
         """Original lines expected in source code (prefix ' ' or '-')."""
-        return [l[1:] for l in self.lines if l.startswith(" ") or l.startswith("-")]
+        return [line[1:] for line in self.lines if line.startswith(" ") or line.startswith("-")]
 
     @property
-    def new_slice(self) -> List[str]:
+    def new_slice(self) -> list[str]:
         """Replacement lines to produce in target code (prefix ' ' or '+')."""
-        return [l[1:] for l in self.lines if l.startswith(" ") or l.startswith("+")]
+        return [line[1:] for line in self.lines if line.startswith(" ") or line.startswith("+")]
 
 
-def parse_unified_diff(diff_text: str) -> Tuple[str, str, List[Hunk]]:
+def parse_unified_diff(diff_text: str) -> tuple[str, str, list[Hunk]]:
     """Parse a unified diff into source/target filenames and list of Hunks."""
     source_file = "solution.cpp"
     target_file = "solution.cpp"
-    hunks: List[Hunk] = []
+    hunks: list[Hunk] = []
 
     lines = diff_text.strip().splitlines()
     idx = 0
@@ -62,7 +69,7 @@ def parse_unified_diff(diff_text: str) -> Tuple[str, str, List[Hunk]]:
             new_len = int(hunk_header_match.group(4)) if hunk_header_match.group(4) is not None else 1
 
             idx += 1
-            hunk_lines: List[str] = []
+            hunk_lines: list[str] = []
             while idx < len(lines):
                 cur = lines[idx]
                 if cur.startswith("@@") or cur.startswith("--- ") or cur.startswith("diff "):
@@ -82,11 +89,10 @@ def parse_unified_diff(diff_text: str) -> Tuple[str, str, List[Hunk]]:
     return source_file, target_file, hunks
 
 
-def validate_syntax_balance(code: str, language: str = "cpp") -> Tuple[bool, Optional[str]]:
+def validate_syntax_balance(code: str, language: str = "cpp") -> tuple[bool, str | None]:
     """Basic balance check for braces and brackets to avoid catastrophic diffs."""
     stack = []
     pairs = {"{": "}", "(": ")", "[": "]"}
-    in_single_line_comment = False
     in_multi_line_comment = False
     in_string = False
     string_char = ""
@@ -99,11 +105,11 @@ def validate_syntax_balance(code: str, language: str = "cpp") -> Tuple[bool, Opt
         while i < len(line):
             ch = line[i]
             if not in_multi_line_comment and not in_string:
-                if language == "cpp" and line[i:i+2] == "//":
+                if language == "cpp" and line[i : i + 2] == "//":
                     break
                 if language == "py" and ch == "#":
                     break
-                if language == "cpp" and line[i:i+2] == "/*":
+                if language == "cpp" and line[i : i + 2] == "/*":
                     in_multi_line_comment = True
                     i += 2
                     continue
@@ -119,9 +125,12 @@ def validate_syntax_balance(code: str, language: str = "cpp") -> Tuple[bool, Opt
                         return False, f"Unmatched closing '{ch}' at line {row}"
                     top, start_row = stack.pop()
                     if pairs[top] != ch:
-                        return False, f"Mismatched '{top}' (line {start_row}) with '{ch}' at line {row}"
+                        return (
+                            False,
+                            f"Mismatched '{top}' (line {start_row}) with '{ch}' at line {row}",
+                        )
             elif in_multi_line_comment:
-                if line[i:i+2] == "*/":
+                if line[i : i + 2] == "*/":
                     in_multi_line_comment = False
                     i += 2
                     continue
@@ -140,7 +149,7 @@ def validate_syntax_balance(code: str, language: str = "cpp") -> Tuple[bool, Opt
     return True, None
 
 
-def apply_patch(original_code: str, raw_diff: str, language: str = "cpp") -> Tuple[bool, str, UnifiedDiffPatch]:
+def apply_patch(original_code: str, raw_diff: str, language: str = "cpp") -> tuple[bool, str, UnifiedDiffPatch]:
     """
     Apply a unified diff to original_code with strict offset and fuzzy fallback.
 

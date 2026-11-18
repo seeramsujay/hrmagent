@@ -1,19 +1,17 @@
 """Test suite for CodeChef dataset curation and HRM Dual-Pair training pipeline."""
 
 import json
-from pathlib import Path
-import pytest
 
+from hrm_agent.patcher import apply_patch
+from hrm_agent.schemas import JevVerdict, PlannerBlueprint
 from training.dataset_miner import DatasetMiner
-from hrm_agent.schemas import ProblemSpec, PlannerBlueprint, JevVerdict
-from hrm_agent.patcher import apply_patch, parse_unified_diff
 
 
 def test_codechef_curation_and_trajectory_mining(tmp_path):
     """Verify CodeChef challenge ingestion, DuckDB relational schema, and trajectory mining."""
     miner = DatasetMiner(output_dir=str(tmp_path))
     miner.populate_synthetic_seed()
-    
+
     # Ingest CodeChef challenges from local cached corpus
     cc_count = miner.populate_codechef_challenges(
         json_path="data/codechef_raw.json",
@@ -23,9 +21,7 @@ def test_codechef_curation_and_trajectory_mining(tmp_path):
     assert cc_count >= 5, f"Expected at least 5 CodeChef challenges, got {cc_count}"
 
     # Verify DuckDB problems table contains CodeChef rows
-    cc_rows = miner.con.execute(
-        "SELECT problem_id, title, source FROM problems WHERE source = 'CODECHEF'"
-    ).fetchall()
+    cc_rows = miner.con.execute("SELECT problem_id, title, source FROM problems WHERE source = 'CODECHEF'").fetchall()
     assert len(cc_rows) >= 5
     assert all(r[2] == "CODECHEF" for r in cc_rows)
 
@@ -60,10 +56,20 @@ def test_dual_pair_balanced_datasets(tmp_path):
         bp_dict = json.loads(record["completion"])
         bp = PlannerBlueprint.model_validate(bp_dict)
         assert bp.paradigm in [
-            "greedy", "dynamic_programming", "two_pointers", "binary_search",
-            "graph_bfs_dfs", "shortest_path", "disjoint_set_union",
-            "segment_tree_fenwick", "math_number_theory", "constructive",
-            "bitmask", "divide_and_conquer", "flow_matching", "brute_force_backtrack"
+            "greedy",
+            "dynamic_programming",
+            "two_pointers",
+            "binary_search",
+            "graph_bfs_dfs",
+            "shortest_path",
+            "disjoint_set_union",
+            "segment_tree_fenwick",
+            "math_number_theory",
+            "constructive",
+            "bitmask",
+            "divide_and_conquer",
+            "flow_matching",
+            "brute_force_backtrack",
         ]
         assert bp.time_complexity.startswith("O(")
 
@@ -85,19 +91,21 @@ def test_dual_pair_balanced_datasets(tmp_path):
         verdict = JevVerdict.model_validate(verdict_dict)
         assert verdict.status in ["PASS", "BUG", "OPTIMIZE"]
         assert verdict.bottleneck_class in [
-            "none", "asymptotic_time", "constant_factor", "memory_limit",
-            "integer_overflow", "edge_case_miss", "logic_flaw", "io_overhead"
+            "none",
+            "asymptotic_time",
+            "constant_factor",
+            "memory_limit",
+            "integer_overflow",
+            "edge_case_miss",
+            "logic_flaw",
+            "io_overhead",
         ]
 
 
 def test_dual_pair_patch_application():
     """Verify that a surgical patch generated from critic directive applies cleanly."""
     original_code = (
-        "def solve(n, k):\n"
-        "    ans = 0\n"
-        "    for i in range(1, len(k)):\n"
-        "        ans += k[i]\n"
-        "    return ans\n"
+        "def solve(n, k):\n    ans = 0\n    for i in range(1, len(k)):\n        ans += k[i]\n    return ans\n"
     )
     diff = (
         "--- a/solution.py\n"

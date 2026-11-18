@@ -10,21 +10,20 @@ Configured with:
 """
 
 import os
-import sys
+from typing import Any
+
 import yaml
-from pathlib import Path
-from typing import Optional, Dict, Any
 
 try:
     import torch
+    from datasets import load_dataset
+    from peft import LoraConfig, TaskType, get_peft_model
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,
-        TrainingArguments,
         DataCollatorForSeq2Seq,
+        TrainingArguments,
     )
-    from peft import LoraConfig, get_peft_model, TaskType
-    from datasets import load_dataset
 except ImportError:
     torch = None
 
@@ -33,6 +32,7 @@ def apply_liger_cross_entropy():
     """Apply Liger chunked cross-entropy kernel to Qwen models for memory efficiency."""
     try:
         from liger_kernel.transformers import apply_liger_kernel_to_qwen2
+
         apply_liger_kernel_to_qwen2()
         print("[HRM Training] Applied Liger chunked cross-entropy kernel for Qwen2.")
     except Exception as e:
@@ -64,17 +64,17 @@ def train_sft(
     train_data_path: str,
     output_dir: str = "outputs/checkpoints",
     config_path: str = "configs/training.yaml",
-    epochs: Optional[int] = None,
-    learning_rate: Optional[float] = None,
-    batch_size: Optional[int] = None,
-    grad_accum: Optional[int] = None,
+    epochs: int | None = None,
+    learning_rate: float | None = None,
+    batch_size: int | None = None,
+    grad_accum: int | None = None,
 ) -> str:
     """Run bf16 LoRA SFT training within the 10GB RTX 3080 / 6GB RTX 4050 VRAM budget."""
     if torch is None:
         raise RuntimeError("PyTorch and Transformers are required for training.")
 
     # Load YAML hyperparameters if available
-    train_cfg: Dict[str, Any] = {}
+    train_cfg: dict[str, Any] = {}
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
@@ -164,6 +164,7 @@ def train_sft(
     )
 
     from transformers import Trainer
+
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -186,13 +187,13 @@ def train_dpo(
     adapter_path: str,
     dpo_data_path: str,
     output_dir: str = "outputs/checkpoints_dpo",
-    epochs: Optional[int] = None,
-    learning_rate: Optional[float] = None,
-    grad_accum: Optional[int] = None,
+    epochs: int | None = None,
+    learning_rate: float | None = None,
+    grad_accum: int | None = None,
 ) -> str:
     """Run DPO training using PEFT adapter-disabled reference model (no duplicate weights in VRAM)."""
     try:
-        from trl import DPOTrainer, DPOConfig
+        from trl import DPOConfig, DPOTrainer
     except ImportError:
         raise RuntimeError("TRL is required for DPO training. Install via `uv pip install trl`.")
 
@@ -210,6 +211,7 @@ def train_dpo(
         trust_remote_code=True,
     )
     from peft import PeftModel
+
     model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
 
     dpo_dataset = load_dataset("json", data_files=dpo_data_path, split="train")

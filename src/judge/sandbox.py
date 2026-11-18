@@ -7,15 +7,16 @@ CE, AC, WA, TLE, MLE, RE.
 """
 
 import os
-import sys
+import resource
 import shutil
+import signal
 import subprocess
+import sys
 import tempfile
 import time
-import signal
-import resource
 from pathlib import Path
-from typing import Optional, Tuple, List, Literal
+from typing import Literal
+
 from hrm_agent.schemas import ExecutionTelemetry, VerdictType
 
 
@@ -32,7 +33,11 @@ def detect_sandbox_engine() -> Literal["nsjail", "bwrap", "setrlimit"]:
     if shutil.which("bwrap"):
         try:
             # Probe if bwrap has permission to execute in this user environment
-            res = subprocess.run(["bwrap", "--ro-bind", "/bin", "/bin", "/bin/true"], capture_output=True, timeout=1.0)
+            res = subprocess.run(
+                ["bwrap", "--ro-bind", "/bin", "/bin", "/bin/true"],
+                capture_output=True,
+                timeout=1.0,
+            )
             if res.returncode == 0:
                 return "bwrap"
         except Exception:
@@ -51,8 +56,8 @@ class SandboxRunner:
 
     def __init__(
         self,
-        engine: Optional[Literal["nsjail", "bwrap", "setrlimit"]] = None,
-        cpu_affinity_mask: Optional[str] = None,
+        engine: Literal["nsjail", "bwrap", "setrlimit"] | None = None,
+        cpu_affinity_mask: str | None = None,
     ):
         self.engine = engine or detect_sandbox_engine()
         self.cpu_affinity_mask = cpu_affinity_mask
@@ -62,7 +67,7 @@ class SandboxRunner:
 
     def compile_cpp(
         self, source_path: Path, output_binary_path: Path, timeout_seconds: float = 10.0
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Compile C++20 source code with optimization and strict flags."""
         cmd = [
             "g++",
@@ -92,11 +97,11 @@ class SandboxRunner:
         except subprocess.TimeoutExpired:
             return False, f"Compilation timed out after {timeout_seconds}s"
         except Exception as e:
-            return False, f"Compilation failed with exception: {str(e)}"
+            return False, f"Compilation failed with exception: {e!s}"
 
     def _execute_with_wait4(
         self,
-        cmd: List[str],
+        cmd: list[str],
         input_data: str,
         time_limit_ms: int,
         memory_limit_mb: int,
@@ -144,7 +149,11 @@ class SandboxRunner:
                 # Pin CPU affinity if requested
                 if self.cpu_affinity_mask and hasattr(os, "sched_setaffinity"):
                     try:
-                        cores = [int(c.strip()) for c in self.cpu_affinity_mask.replace("-", ",").split(",") if c.strip().isdigit()]
+                        cores = [
+                            int(c.strip())
+                            for c in self.cpu_affinity_mask.replace("-", ",").split(",")
+                            if c.strip().isdigit()
+                        ]
                         if cores:
                             os.sched_setaffinity(0, set(cores))
                     except Exception:
@@ -281,7 +290,7 @@ class SandboxRunner:
 
     def _execute_bwrap(
         self,
-        cmd: List[str],
+        cmd: list[str],
         input_data: str,
         time_limit_ms: int,
         memory_limit_mb: int,
@@ -295,13 +304,24 @@ class SandboxRunner:
         bwrap_cmd = [
             self.bwrap_bin,
             "--unshare-all",
-            "--ro-bind", "/usr", "/usr",
-            "--ro-bind", "/lib", "/lib",
-            "--ro-bind", "/bin", "/bin",
-            "--proc", "/proc",
-            "--dev", "/dev",
-            "--bind", str(cwd), str(cwd),
-            "--chdir", str(cwd),
+            "--ro-bind",
+            "/usr",
+            "/usr",
+            "--ro-bind",
+            "/lib",
+            "/lib",
+            "--ro-bind",
+            "/bin",
+            "/bin",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--bind",
+            str(cwd),
+            str(cwd),
+            "--chdir",
+            str(cwd),
         ]
         if os.path.exists("/lib64"):
             bwrap_cmd.extend(["--ro-bind", "/lib64", "/lib64"])
@@ -376,7 +396,7 @@ class SandboxRunner:
 
     def _execute_nsjail(
         self,
-        cmd: List[str],
+        cmd: list[str],
         input_data: str,
         time_limit_ms: int,
         memory_limit_mb: int,
@@ -388,15 +408,23 @@ class SandboxRunner:
 
         nsjail_cmd = [
             self.nsjail_bin,
-            "--mode", "standalone",
-            "--chroot", "/",
-            "--user", "65534",
-            "--group", "65534",
-            "--time_limit", str(time_limit_secs),
-            "--cgroup_mem_max", str(mem_bytes),
-            "--max_cpus", "1",
+            "--mode",
+            "standalone",
+            "--chroot",
+            "/",
+            "--user",
+            "65534",
+            "--group",
+            "65534",
+            "--time_limit",
+            str(time_limit_secs),
+            "--cgroup_mem_max",
+            str(mem_bytes),
+            "--max_cpus",
+            "1",
             "--disable_proc",
-            "--cwd", str(cwd),
+            "--cwd",
+            str(cwd),
             "--",
         ] + cmd
 
@@ -459,10 +487,10 @@ class SandboxRunner:
         code: str,
         language: Literal["cpp", "python"],
         input_data: str,
-        expected_output: Optional[str] = None,
+        expected_output: str | None = None,
         time_limit_ms: int = 2000,
         memory_limit_mb: int = 256,
-        custom_checker: Optional[str] = None,
+        custom_checker: str | None = None,
     ) -> ExecutionTelemetry:
         """Run code in the sandboxed environment and verify against expected output."""
         with tempfile.TemporaryDirectory(prefix="hrm_sandbox_") as tmpdir:
@@ -503,7 +531,13 @@ class SandboxRunner:
             if telemetry.verdict == "AC" and expected_output is not None:
                 if custom_checker:
                     # Run custom checker script
-                    passed = self._run_custom_checker(custom_checker, input_data, telemetry.stdout, expected_output, work_dir)
+                    passed = self._run_custom_checker(
+                        custom_checker,
+                        input_data,
+                        telemetry.stdout,
+                        expected_output,
+                        work_dir,
+                    )
                     if not passed:
                         telemetry.verdict = "WA"
                 else:
@@ -535,7 +569,13 @@ class SandboxRunner:
         ans_file = cwd / "expected_out.txt"
         ans_file.write_text(expected_output, encoding="utf-8")
 
-        cmd = [sys.executable, str(checker_file), str(in_file), str(out_file), str(ans_file)]
+        cmd = [
+            sys.executable,
+            str(checker_file),
+            str(in_file),
+            str(out_file),
+            str(ans_file),
+        ]
         try:
             res = subprocess.run(cmd, capture_output=True, timeout=5.0, cwd=str(cwd))
             return res.returncode == 0

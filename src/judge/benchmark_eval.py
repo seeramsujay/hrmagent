@@ -5,19 +5,17 @@ runs 3-way ablation (Node 2 Only, Node 1+2, Full HRM), computes Jev precision & 
 average CPU wall time, and token economics.
 """
 
-import os
 import json
-import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any
+
 from rich.console import Console
 from rich.table import Table
 
-from hrm_agent.schemas import ProblemSpec, AgentTrace, JevVerdict
 from hrm_agent.hrm_loop import HRMAgentLoop
 from hrm_agent.llm_engine import LLMEngine
+from hrm_agent.schemas import ProblemSpec
 from judge.sandbox import SandboxRunner
-
 
 RATING_BUCKETS = [
     ("<1200", lambda r: r is not None and r < 1200),
@@ -36,7 +34,7 @@ class BenchmarkEvaluator:
         node1_planner: LLMEngine,
         node2_coder: LLMEngine,
         node3_critic: LLMEngine,
-        sandbox: Optional[SandboxRunner] = None,
+        sandbox: SandboxRunner | None = None,
         language: str = "cpp",
         grammar_dir: str = "grammars",
     ):
@@ -48,7 +46,7 @@ class BenchmarkEvaluator:
         self.grammar_dir = grammar_dir
         self.console = Console()
 
-    def _get_bucket_label(self, rating: Optional[int]) -> str:
+    def _get_bucket_label(self, rating: int | None) -> str:
         if rating is None:
             return "1200-1500"
         for label, predicate in RATING_BUCKETS:
@@ -56,16 +54,14 @@ class BenchmarkEvaluator:
                 return label
         return "1200-1500"
 
-    def evaluate_ablation(
-        self, problems: List[ProblemSpec], output_report_path: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def evaluate_ablation(self, problems: list[ProblemSpec], output_report_path: str | None = None) -> dict[str, Any]:
         """
         Run 3-way ablation comparison:
         1. Node 2 Only (Zero-shot fast coder)
         2. Node 1 + 2 (Planner + Coder)
         3. Full HRM (Node 1 Planner + Node 2 Coder + Node 3 Jev Critic with Escalation)
         """
-        results: Dict[str, Any] = {
+        results: dict[str, Any] = {
             "node2_only": {"solved": 0, "total": len(problems), "traces": []},
             "node1_2": {"solved": 0, "total": len(problems), "traces": []},
             "full_hrm": {"solved": 0, "total": len(problems), "traces": []},
@@ -99,7 +95,6 @@ class BenchmarkEvaluator:
                 grammar_dir=self.grammar_dir,
             )
             # Direct code generation with dummy blueprint
-            dummy_bp = None
             code_n2, telem_n2 = loop_n2._run_coder_plan_to_code(
                 prob,
                 blueprint=type(
@@ -196,7 +191,7 @@ class BenchmarkEvaluator:
 
         return results
 
-    def print_summary_tables(self, results: Dict[str, Any]) -> None:
+    def print_summary_tables(self, results: dict[str, Any]) -> None:
         """Display rich terminal tables for Pass@1 ablation and rating buckets."""
         # Table 1: Ablation Comparison
         abl_table = Table(title="HRM Competitive Programming Agent — Ablation Suite")
@@ -241,7 +236,10 @@ class BenchmarkEvaluator:
         tele_table.add_column("Value", style="bold", justify="right")
 
         tele_table.add_row("Jev Critic Precision", f"{results['jev_precision']:.3f}")
-        tele_table.add_row("Jev Critic False Positive Rate", f"{results['jev_false_positive_rate']:.3f}")
+        tele_table.add_row(
+            "Jev Critic False Positive Rate",
+            f"{results['jev_false_positive_rate']:.3f}",
+        )
         tele_table.add_row("Avg Execution Wall Time", f"{results['avg_cpu_wall_ms']} ms")
         tele_table.add_row("Avg Tokens / Problem", f"{results['avg_tokens_per_problem']}")
         self.console.print(tele_table)

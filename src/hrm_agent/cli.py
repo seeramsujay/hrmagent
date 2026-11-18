@@ -10,20 +10,20 @@ Provides commands:
 
 import json
 import os
-import yaml
 from pathlib import Path
-from typing import Optional
+
 import typer
+import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
-from hrm_agent.schemas import ProblemSpec
-from hrm_agent.llm_engine import LlamaCppEngine, MockLLMEngine
 from hrm_agent.hrm_loop import HRMAgentLoop
-from judge.sandbox import SandboxRunner
+from hrm_agent.llm_engine import LlamaCppEngine, MockLLMEngine
+from hrm_agent.schemas import ProblemSpec
 from judge.benchmark_eval import BenchmarkEvaluator
+from judge.sandbox import SandboxRunner
 from training.dataset_miner import DatasetMiner
 from training.export_gguf import (
     build_calibration_dataset,
@@ -47,7 +47,9 @@ def mine_data(
     gm_cutoff: int = typer.Option(2200, help="Upper Grandmaster cutoff"),
     seed_synthetic: bool = typer.Option(True, help="Seed synthetic problems and trajectories"),
     include_codechef: bool = typer.Option(True, help="Include CodeChef competitive programming challenges"),
-    codechef_json: Optional[str] = typer.Option("data/codechef_raw.json", help="Path to local or cached CodeChef JSON file"),
+    codechef_json: str | None = typer.Option(
+        "data/codechef_raw.json", help="Path to local or cached CodeChef JSON file"
+    ),
 ):
     """Run Hugging Face + DuckDB curation and trajectory mining pipeline."""
     console.print(Panel.fit("[bold blue]Starting HRM Dataset Mining Pipeline[/bold blue]"))
@@ -82,16 +84,16 @@ def mine_data(
 def train_lora(
     config_path: str = typer.Option("configs/training.yaml", help="Path to training config"),
     mode: str = typer.Option("sft", help="Training mode: 'sft' or 'dpo'"),
-    train_data: Optional[str] = typer.Option(None, help="Path to training jsonl"),
-    base_model: Optional[str] = typer.Option(None, help="Base model identifier or path"),
+    train_data: str | None = typer.Option(None, help="Path to training jsonl"),
+    base_model: str | None = typer.Option(None, help="Base model identifier or path"),
     output_dir: str = typer.Option("outputs/checkpoints", help="Output directory"),
-    epochs: Optional[int] = typer.Option(None, help="Number of training epochs"),
-    grad_accum: Optional[int] = typer.Option(None, help="Gradient accumulation steps"),
-    learning_rate: Optional[float] = typer.Option(None, help="Learning rate override"),
+    epochs: int | None = typer.Option(None, help="Number of training epochs"),
+    grad_accum: int | None = typer.Option(None, help="Gradient accumulation steps"),
+    learning_rate: float | None = typer.Option(None, help="Learning rate override"),
 ):
     """Train bf16 LoRA adapter on single GPU with adamw_8bit and chunked CE."""
     console.print(Panel.fit(f"[bold magenta]HRM LoRA Training — Mode: {mode.upper()}[/bold magenta]"))
-    from training.train_sft_lora import train_sft, train_dpo
+    from training.train_sft_lora import train_dpo, train_sft
 
     # Load config defaults
     chosen_base = base_model
@@ -165,7 +167,7 @@ def solve_problem(
     problem_file: str = typer.Option(..., help="Path to JSON problem specification file"),
     language: str = typer.Option("cpp", help="Target language ('cpp' or 'python')"),
     mock: bool = typer.Option(False, help="Use deterministic mock LLM for testing/demo"),
-    trace_output: Optional[str] = typer.Option(None, help="Optional JSONL file to persist trace"),
+    trace_output: str | None = typer.Option(None, help="Optional JSONL file to persist trace"),
 ):
     """Solve a competitive programming problem using the 3-node HRM closed-loop pipeline."""
     console.print(Panel.fit(f"[bold yellow]Solving Problem: {problem_file}[/bold yellow]"))
@@ -230,7 +232,12 @@ def solve_problem(
     console.print(table)
 
     if trace.final_code:
-        syntax = Syntax(trace.final_code, "cpp" if language == "cpp" else "python", theme="monokai", line_numbers=True)
+        syntax = Syntax(
+            trace.final_code,
+            "cpp" if language == "cpp" else "python",
+            theme="monokai",
+            line_numbers=True,
+        )
         console.print(Panel(syntax, title="Final Synthesized Code"))
 
 

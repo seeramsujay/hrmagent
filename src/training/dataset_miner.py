@@ -11,12 +11,13 @@ Implements:
 5. Balanced datasets for Node 1, Node 2 (60% plan-to-code / 40% error-to-diff + DPO pairs), and Node 3.
 """
 
-import os
-import re
 import difflib
 import json
+import os
+import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Set, Tuple
+from typing import Any
+
 import duckdb
 
 try:
@@ -38,14 +39,17 @@ def strip_comments(code: str, language: str = "cpp") -> str:
     return code
 
 
-def tokenize_lexical(code: str) -> List[str]:
+def tokenize_lexical(code: str) -> list[str]:
     """Tokenize source code into identifiers, keywords, and operators for lexical Jaccard."""
     clean = strip_comments(code)
-    tokens = re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+|==|!=|<=|>=|\+\+|--|&&|\|\||<<|>>|[+\-*/%=<>&|^~!]", clean)
+    tokens = re.findall(
+        r"[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+|==|!=|<=|>=|\+\+|--|&&|\|\||<<|>>|[+\-*/%=<>&|^~!]",
+        clean,
+    )
     return tokens
 
 
-def compute_jaccard(tokens_a: List[str], tokens_b: List[str]) -> float:
+def compute_jaccard(tokens_a: list[str], tokens_b: list[str]) -> float:
     """Compute Jaccard similarity over multi-sets of lexical tokens."""
     set_a = set(tokens_a)
     set_b = set(tokens_b)
@@ -68,7 +72,7 @@ def generate_diff(old_code: str, new_code: str, filename: str = "solution.cpp") 
     return "".join(diff)
 
 
-def extract_8grams(text: str) -> Set[str]:
+def extract_8grams(text: str) -> set[str]:
     """Extract rolling word 8-grams for decontamination against test splits."""
     words = re.findall(r"\w+", text.lower())
     if len(words) < 8:
@@ -209,7 +213,7 @@ class DatasetMiner:
 
     def populate_codechef_challenges(
         self,
-        json_path: Optional[str] = "data/codechef_raw.json",
+        json_path: str | None = "data/codechef_raw.json",
         limit: int = 50,
         streaming: bool = False,
     ) -> int:
@@ -239,12 +243,16 @@ class DatasetMiner:
                     human_msg = conv[1]["value"]
                     gpt_msg = conv[2]["value"]
 
-                    lines = [l.strip() for l in human_msg.split("\n") if l.strip()]
-                    title = lines[0] if lines else f"CodeChef Problem {idx+1}"
+                    lines = [line_str.strip() for line_str in human_msg.split("\n") if line_str.strip()]
+                    title = lines[0] if lines else f"CodeChef Problem {idx + 1}"
                     if "All submissions" in title and len(lines) > 1:
                         title = lines[1][:60]
 
-                    thought_m = re.search(r"<\|begin_of_thought\|>(.*?)<\|end_of_thought\|>", gpt_msg, re.DOTALL)
+                    thought_m = re.search(
+                        r"<\|begin_of_thought\|>(.*?)<\|end_of_thought\|>",
+                        gpt_msg,
+                        re.DOTALL,
+                    )
                     thought = thought_m.group(1).strip() if thought_m else ""
 
                     code_m = re.search(r"```(?:cpp|c\+\+|python|py)?\s*(.*?)\s*```", gpt_msg, re.DOTALL)
@@ -261,7 +269,9 @@ class DatasetMiner:
                         paradigm = "dynamic_programming"
                     elif "greedy" in text_corpus:
                         paradigm = "greedy"
-                    elif "tree" in text_corpus or "graph" in text_corpus or "dfs" in text_corpus or "bfs" in text_corpus:
+                    elif (
+                        "tree" in text_corpus or "graph" in text_corpus or "dfs" in text_corpus or "bfs" in text_corpus
+                    ):
                         paradigm = "graph_bfs_dfs"
                     elif "binary search" in text_corpus:
                         paradigm = "binary_search"
@@ -278,7 +288,7 @@ class DatasetMiner:
 
                     records.append(
                         {
-                            "id": f"CC-{idx+1:04d}",
+                            "id": f"CC-{idx + 1:04d}",
                             "title": title,
                             "description": human_msg[:1000],
                             "thought": thought[:800],
@@ -295,7 +305,7 @@ class DatasetMiner:
         # Insert records into DuckDB schema
         inserted = 0
         for item in records[:limit]:
-            pid = item.get("id", f"CC-{inserted+1:04d}")
+            pid = item.get("id", f"CC-{inserted + 1:04d}")
             title = item.get("title", "CodeChef Challenge")
             desc = item.get("description", "")
             code = item.get("code", "")
@@ -371,7 +381,7 @@ class DatasetMiner:
 
         return inserted
 
-    def mine_trajectories(self) -> List[Dict[str, Any]]:
+    def mine_trajectories(self) -> list[dict[str, Any]]:
         """
         Mine trajectory pairs (fail -> AC) with:
         - dt <= 3600s
@@ -431,7 +441,7 @@ class DatasetMiner:
                 )
         return trajectories
 
-    def build_balanced_datasets(self) -> Dict[str, str]:
+    def build_balanced_datasets(self) -> dict[str, str]:
         """
         Generate balanced training datasets:
         - Node 1: <250-token blueprints
@@ -523,7 +533,11 @@ class DatasetMiner:
                 "space_complexity": "O(N)",
                 "use_int64": True,
                 "edge_cases": ["N=1", "extreme values"],
-                "steps": ["Initialize I/O", "Process elements according to paradigm", "Output result"],
+                "steps": [
+                    "Initialize I/O",
+                    "Process elements according to paradigm",
+                    "Output result",
+                ],
             }
             node1_records.append(
                 {
@@ -565,7 +579,9 @@ class DatasetMiner:
                         {
                             "analysis": f"Detected {traj['fail_verdict']} failure due to type overflow or bottleneck",
                             "status": "BUG" if traj["fail_verdict"] == "WA" else "OPTIMIZE",
-                            "bottleneck_class": "integer_overflow" if traj["fail_verdict"] == "WA" else "asymptotic_time",
+                            "bottleneck_class": "integer_overflow"
+                            if traj["fail_verdict"] == "WA"
+                            else "asymptotic_time",
                             "escalate_to_planner": False,
                             "target_lines": "L8-L15",
                             "patch_directive": "Cast accumulators to 64-bit int and check constraints",
@@ -603,8 +619,7 @@ class DatasetMiner:
         ]:
             file_path = self.output_dir / name
             with open(file_path, "w", encoding="utf-8") as f:
-                for item in data:
-                    f.write(json.dumps(item) + "\n")
+                f.writelines(json.dumps(item) + "\n" for item in data)
             paths[name] = str(file_path)
 
         return paths

@@ -9,14 +9,14 @@ Enforces:
 - Option A (three resident models) & Option B (hybrid resident 0.5B + shared 1.5B multi-LoRA)
 """
 
+import json
 import os
 import time
-import json
-import urllib.request
 import urllib.error
+import urllib.request
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Any
+from typing import Any
 
 from hrm_agent.schemas import LLMTelemetry
 
@@ -28,15 +28,14 @@ class LLMEngine(ABC):
     def generate(
         self,
         prompt: str,
-        grammar_text: Optional[str] = None,
-        grammar_path: Optional[str] = None,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
         top_p: float = 0.95,
-        stop: Optional[List[str]] = None,
-    ) -> Tuple[str, LLMTelemetry]:
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
         """Generate text constrained by grammar and report performance telemetry."""
-        pass
 
 
 class LlamaCppEngine(LLMEngine):
@@ -48,10 +47,10 @@ class LlamaCppEngine(LLMEngine):
         n_ctx: int = 2048,
         type_k: str = "q8_0",
         type_v: str = "q8_0",
-        n_threads: Optional[int] = None,
-        lora_path: Optional[str] = None,
-        lora_base: Optional[str] = None,
-        p_core_mask: Optional[str] = None,
+        n_threads: int | None = None,
+        lora_path: str | None = None,
+        lora_base: str | None = None,
+        p_core_mask: str | None = None,
     ):
         try:
             import llama_cpp
@@ -96,7 +95,7 @@ class LlamaCppEngine(LLMEngine):
         tv = kv_cache_type_map.get(type_v.lower(), 8)
 
         # Initialize Llama model
-        llama_kwargs: Dict[str, Any] = {
+        llama_kwargs: dict[str, Any] = {
             "model_path": model_path,
             "n_ctx": n_ctx,
             "n_threads": self.n_threads,
@@ -115,9 +114,9 @@ class LlamaCppEngine(LLMEngine):
                 llama_kwargs["lora_base"] = lora_base
 
         self.llm = llama_cpp.Llama(**llama_kwargs)
-        self._grammar_cache: Dict[str, Any] = {}
+        self._grammar_cache: dict[str, Any] = {}
 
-    def load_grammar(self, grammar_text: Optional[str] = None, grammar_path: Optional[str] = None) -> Any:
+    def load_grammar(self, grammar_text: str | None = None, grammar_path: str | None = None) -> Any:
         """Load and cache GBNF grammar."""
         if grammar_path and os.path.exists(grammar_path):
             if grammar_path in self._grammar_cache:
@@ -135,7 +134,7 @@ class LlamaCppEngine(LLMEngine):
             return compiled
         return None
 
-    def swap_lora(self, lora_path: Optional[str]) -> None:
+    def swap_lora(self, lora_path: str | None) -> None:
         """Dynamically load or unload LoRA adapter for Option B multi-LoRA topology."""
         if hasattr(self.llm, "apply_lora_from_file"):
             if lora_path and os.path.exists(lora_path):
@@ -145,13 +144,13 @@ class LlamaCppEngine(LLMEngine):
     def generate(
         self,
         prompt: str,
-        grammar_text: Optional[str] = None,
-        grammar_path: Optional[str] = None,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
         top_p: float = 0.95,
-        stop: Optional[List[str]] = None,
-    ) -> Tuple[str, LLMTelemetry]:
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
         """Execute constrained generation with prompt prefix reuse and telemetry."""
         grammar = self.load_grammar(grammar_text=grammar_text, grammar_path=grammar_path)
 
@@ -198,13 +197,13 @@ class LlamaServerEngine(LLMEngine):
     def generate(
         self,
         prompt: str,
-        grammar_text: Optional[str] = None,
-        grammar_path: Optional[str] = None,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
         top_p: float = 0.95,
-        stop: Optional[List[str]] = None,
-    ) -> Tuple[str, LLMTelemetry]:
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
         if grammar_path and os.path.exists(grammar_path):
             grammar_text = Path(grammar_path).read_text(encoding="utf-8")
 
@@ -251,7 +250,7 @@ class LlamaServerEngine(LLMEngine):
 class MockLLMEngine(LLMEngine):
     """Deterministic mock LLM engine used for tests and offline validation."""
 
-    def __init__(self, responses: Optional[List[str]] = None):
+    def __init__(self, responses: list[str] | None = None):
         self.responses = responses or []
         self.call_idx = 0
 
@@ -261,13 +260,13 @@ class MockLLMEngine(LLMEngine):
     def generate(
         self,
         prompt: str,
-        grammar_text: Optional[str] = None,
-        grammar_path: Optional[str] = None,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
         top_p: float = 0.95,
-        stop: Optional[List[str]] = None,
-    ) -> Tuple[str, LLMTelemetry]:
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
         if self.call_idx < len(self.responses):
             text = self.responses[self.call_idx]
             self.call_idx += 1
@@ -275,7 +274,7 @@ class MockLLMEngine(LLMEngine):
             # Generate generic fallback based on prompt or grammar
             if (grammar_path and "planner" in grammar_path) or "system 2 algorithmic planner" in prompt.lower():
                 text = (
-                    '{\n'
+                    "{\n"
                     '  "analysis": "Optimal greedy single-pass scan maintaining running total",\n'
                     '  "paradigm": "greedy",\n'
                     '  "data_structures": ["vector"],\n'
@@ -287,29 +286,29 @@ class MockLLMEngine(LLMEngine):
                     '    "Read test case count T and iterate",\n'
                     '    "Accumulate sum using long long to avoid 32-bit overflow",\n'
                     '    "Output result with newline"\n'
-                    '  ]\n'
-                    '}'
+                    "  ]\n"
+                    "}"
                 )
             elif (grammar_path and "critic" in grammar_path) or "jev, a rigorous" in prompt.lower():
                 text = (
-                    '{\n'
+                    "{\n"
                     '  "analysis": "Solution passes sample cases and runs well within 1.0s limit",\n'
                     '  "status": "PASS",\n'
                     '  "bottleneck_class": "none",\n'
                     '  "escalate_to_planner": false,\n'
                     '  "target_lines": "none",\n'
                     '  "patch_directive": "None required"\n'
-                    '}'
+                    "}"
                 )
             elif (grammar_path and "diff" in grammar_path) or "unified diff" in prompt.lower():
                 text = (
-                    '--- a/solution.cpp\n'
-                    '+++ b/solution.cpp\n'
-                    '@@ -5,3 +5,3 @@\n'
-                    '     int a, b;\n'
-                    '-    cin >> a;\n'
-                    '+    cin >> a >> b;\n'
-                    '     return 0;\n'
+                    "--- a/solution.cpp\n"
+                    "+++ b/solution.cpp\n"
+                    "@@ -5,3 +5,3 @@\n"
+                    "     int a, b;\n"
+                    "-    cin >> a;\n"
+                    "+    cin >> a >> b;\n"
+                    "     return 0;\n"
                 )
             elif (grammar_path and "py_raw" in grammar_path) or "python" in prompt.lower():
                 text = (
@@ -328,33 +327,33 @@ class MockLLMEngine(LLMEngine):
             else:
                 # Default C++20 raw program
                 text = (
-                    '#include <iostream>\n'
-                    '#include <vector>\n'
-                    '#include <numeric>\n'
-                    'using namespace std;\n'
-                    'using ll = long long;\n'
-                    '\n'
-                    'void solve() {\n'
-                    '    int n;\n'
-                    '    if (!(cin >> n)) return;\n'
-                    '    ll total = 0;\n'
-                    '    for (int i = 0; i < n; ++i) {\n'
-                    '        ll x;\n'
-                    '        cin >> x;\n'
-                    '        total += x;\n'
-                    '    }\n'
+                    "#include <iostream>\n"
+                    "#include <vector>\n"
+                    "#include <numeric>\n"
+                    "using namespace std;\n"
+                    "using ll = long long;\n"
+                    "\n"
+                    "void solve() {\n"
+                    "    int n;\n"
+                    "    if (!(cin >> n)) return;\n"
+                    "    ll total = 0;\n"
+                    "    for (int i = 0; i < n; ++i) {\n"
+                    "        ll x;\n"
+                    "        cin >> x;\n"
+                    "        total += x;\n"
+                    "    }\n"
                     '    cout << total << "\\n";\n'
-                    '}\n'
-                    '\n'
-                    'int main() {\n'
-                    '    ios::sync_with_stdio(false);\n'
-                    '    cin.tie(nullptr);\n'
-                    '    int t = 1;\n'
-                    '    if (cin >> t) {\n'
-                    '        while (t--) solve();\n'
-                    '    }\n'
-                    '    return 0;\n'
-                    '}\n'
+                    "}\n"
+                    "\n"
+                    "int main() {\n"
+                    "    ios::sync_with_stdio(false);\n"
+                    "    cin.tie(nullptr);\n"
+                    "    int t = 1;\n"
+                    "    if (cin >> t) {\n"
+                    "        while (t--) solve();\n"
+                    "    }\n"
+                    "    return 0;\n"
+                    "}\n"
                 )
 
         telemetry = LLMTelemetry(

@@ -1,9 +1,9 @@
 """Pydantic v2 schemas for the HRM competitive programming agent."""
 
 from datetime import datetime, timezone
-from typing import Literal, Optional, List
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from typing import Literal
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ParadigmType = Literal[
     "greedy",
@@ -51,15 +51,15 @@ class ProblemSpec(BaseModel):
     constraints: str = Field(default="", description="Numerical bounds (e.g., 1 <= N <= 2*10^5)")
     time_limit_ms: int = Field(default=2000, description="Time limit in milliseconds")
     memory_limit_mb: int = Field(default=256, description="Memory limit in megabytes")
-    sample_inputs: List[str] = Field(default_factory=list, description="Sample input strings")
-    sample_outputs: List[str] = Field(default_factory=list, description="Expected sample output strings")
-    checker_code: Optional[str] = Field(default=None, description="Optional custom checker script (Python/C++)")
-    rating: Optional[int] = Field(default=None, description="Difficulty rating (e.g. Codeforces rating)")
-    tags: List[str] = Field(default_factory=list, description="Category tags")
+    sample_inputs: list[str] = Field(default_factory=list, description="Sample input strings")
+    sample_outputs: list[str] = Field(default_factory=list, description="Expected sample output strings")
+    checker_code: str | None = Field(default=None, description="Optional custom checker script (Python/C++)")
+    rating: int | None = Field(default=None, description="Difficulty rating (e.g. Codeforces rating)")
+    tags: list[str] = Field(default_factory=list, description="Category tags")
 
     @field_validator("sample_inputs", "sample_outputs")
     @classmethod
-    def clean_samples(cls, v: List[str]) -> List[str]:
+    def clean_samples(cls, v: list[str]) -> list[str]:
         return [s.replace("\r\n", "\n") for s in v]
 
 
@@ -70,12 +70,15 @@ class PlannerBlueprint(BaseModel):
 
     analysis: str = Field(..., description="Dense algorithmic reasoning preceding constrained slots")
     paradigm: ParadigmType = Field(..., description="Primary algorithmic design paradigm")
-    data_structures: List[str] = Field(default_factory=list, description="Key data structures used")
+    data_structures: list[str] = Field(default_factory=list, description="Key data structures used")
     time_complexity: str = Field(..., description="Regex-compatible time complexity e.g. O(N log N)")
     space_complexity: str = Field(..., description="Space complexity e.g. O(N)")
     use_int64: bool = Field(default=True, description="Flag indicating if 64-bit integer type is necessary")
-    edge_cases: List[str] = Field(default_factory=list, description="Explicit boundary cases to guard")
-    steps: List[str] = Field(default_factory=list, description="Ordered step-by-step implementation instructions")
+    edge_cases: list[str] = Field(default_factory=list, description="Explicit boundary cases to guard")
+    steps: list[str] = Field(
+        default_factory=list,
+        description="Ordered step-by-step implementation instructions",
+    )
 
 
 class UnifiedDiffPatch(BaseModel):
@@ -88,7 +91,7 @@ class UnifiedDiffPatch(BaseModel):
     target_file: str = Field(default="solution.cpp", description="Target patched file path")
     hunks_count: int = Field(default=0, description="Number of parsed diff hunks")
     applied_cleanly: bool = Field(default=False, description="Whether patch applied without offset fuzz")
-    validation_error: Optional[str] = Field(default=None, description="Error message if patching failed")
+    validation_error: str | None = Field(default=None, description="Error message if patching failed")
 
 
 class ExecutionTelemetry(BaseModel):
@@ -141,16 +144,16 @@ class AgentTrace(BaseModel):
 
     problem_id: str
     start_time: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    end_time: Optional[str] = None
+    end_time: str | None = None
     solved: bool = False
     final_verdict: str = "UNKNOWN"
     macro_steps: int = 0
     micro_iterations: int = 0
     critic_iterations: int = 0
-    planner_blueprints: List[PlannerBlueprint] = Field(default_factory=list)
-    candidate_codes: List[str] = Field(default_factory=list)
-    patches: List[str] = Field(default_factory=list)
-    telemetry_history: List[ExecutionTelemetry] = Field(default_factory=list)
-    critic_verdicts: List[JevVerdict] = Field(default_factory=list)
-    llm_metrics: List[LLMTelemetry] = Field(default_factory=list)
-    final_code: Optional[str] = None
+    planner_blueprints: list[PlannerBlueprint] = Field(default_factory=list)
+    candidate_codes: list[str] = Field(default_factory=list)
+    patches: list[str] = Field(default_factory=list)
+    telemetry_history: list[ExecutionTelemetry] = Field(default_factory=list)
+    critic_verdicts: list[JevVerdict] = Field(default_factory=list)
+    llm_metrics: list[LLMTelemetry] = Field(default_factory=list)
+    final_code: str | None = None
