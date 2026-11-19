@@ -241,11 +241,9 @@ def get_default_terminal_bench_tasks() -> list[TerminalTask]:
             ),
             setup_files={
                 "configs/app.yaml": (
-                    "service: app\n" "port: 8080\n" "legacy_endpoint: http://old.hrm.local\n" "timeout_ms: 5000\n"
+                    "service: app\nport: 8080\nlegacy_endpoint: http://old.hrm.local\ntimeout_ms: 5000\n"
                 ),
-                "configs/db.yaml": (
-                    "service: db\n" "port: 5432\n" "legacy_endpoint: http://old.hrm.local\n" "pool_size: 20\n"
-                ),
+                "configs/db.yaml": ("service: db\nport: 5432\nlegacy_endpoint: http://old.hrm.local\npool_size: 20\n"),
                 "refactor.sh": (
                     "#!/usr/bin/env bash\n"
                     "set -euo pipefail\n"

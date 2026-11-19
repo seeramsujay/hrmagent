@@ -6,7 +6,7 @@ from hrm_agent.patcher import apply_patch, parse_search_replace_blocks
 
 def test_search_replace_diff_patching():
     """Verify SEARCH / REPLACE diff blocks replace code cleanly without fragile line offsets."""
-    original_code = "def compute(a, b):\n" "    result = a + b\n" "    print('debug: summing')\n" "    return result\n"
+    original_code = "def compute(a, b):\n    result = a + b\n    print('debug: summing')\n    return result\n"
 
     diff = (
         "<<<<<<< SEARCH\n"

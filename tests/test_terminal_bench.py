@@ -41,9 +41,9 @@ def test_terminal_bench_execution_and_reporting(tmp_path):
     summary = evaluator.evaluate_all(output_report_path=str(report_file))
 
     assert summary["total_tasks"] >= 5
-    assert (
-        summary["passed_tasks"] == summary["total_tasks"]
-    ), f"Expected all tasks to pass, got: {summary['passed_tasks']}/{summary['total_tasks']}"
+    tot = summary["total_tasks"]
+    passed = summary["passed_tasks"]
+    assert passed == tot, f"Expected all tasks to pass, got: {passed}/{tot}"
     assert summary["pass_rate_pct"] == 100.0
     assert summary["total_wall_clock_ms"] > 0
 
