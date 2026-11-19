@@ -20,3 +20,4 @@ outputs/*.safetensors
 outputs/harness_report.json
 data/curated/*.parquet
 third_party/
+export/
