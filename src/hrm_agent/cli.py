@@ -383,6 +383,16 @@ def serve(
     import uvicorn
 
     if reload:
+        if api_key:
+            os.environ["HRM_API_KEY"] = api_key
+        if mode:
+            os.environ["HRM_MODE"] = mode
+        if device:
+            os.environ["HRM_DEVICE"] = device
+        if role1_path:
+            os.environ["HRM_ROLE1_PATH"] = role1_path
+        if role2_path:
+            os.environ["HRM_ROLE2_PATH"] = role2_path
         uvicorn.run("hrm_agent.server:app", host=host, port=port, reload=True)
     else:
         from hrm_agent.server import create_app

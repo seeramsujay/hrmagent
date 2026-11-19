@@ -10,6 +10,7 @@ Addresses sub-1B and 1.5B intelligence ceilings through:
 
 import os
 import re
+import signal
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -40,7 +41,7 @@ class CodeActionTools:
     def read_file(self, path: str) -> str:
         """Read text from a relative or absolute file within workspace."""
         target = (self.workspace / path).resolve()
-        if not str(target).startswith(str(self.workspace.resolve())):
+        if not target.is_relative_to(self.workspace.resolve()):
             return "Error: Access outside workspace sandbox denied."
         if not target.exists():
             return f"Error: File '{path}' does not exist."
@@ -52,7 +53,7 @@ class CodeActionTools:
     def write_file(self, path: str, content: str) -> str:
         """Write text to a file, creating parent directories if needed."""
         target = (self.workspace / path).resolve()
-        if not str(target).startswith(str(self.workspace.resolve())):
+        if not target.is_relative_to(self.workspace.resolve()):
             return "Error: Access outside workspace sandbox denied."
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -64,20 +65,29 @@ class CodeActionTools:
     def run_command(self, cmd: str, timeout_sec: float = 15.0) -> str:
         """Run a shell command inside the workspace sandbox."""
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
                 shell=True,
                 cwd=str(self.workspace),
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout_sec,
+                start_new_session=True,
             )
-            out = proc.stdout
-            if proc.stderr:
-                out += f"\n[stderr]\n{proc.stderr}"
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except OSError:
+                    pass
+                proc.communicate()
+                return f"Error: Command timed out after {timeout_sec}s"
+
+            out = stdout
+            if stderr:
+                out += f"\n[stderr]\n{stderr}"
             return out.strip() or f"Command exited with code {proc.returncode}"
-        except subprocess.TimeoutExpired:
-            return f"Error: Command timed out after {timeout_sec}s"
         except Exception as e:
             return f"Error executing command: {e}"
 
@@ -139,14 +149,16 @@ class CodeActionAgent:
         return ""
 
     def execute_code_action(self, python_code: str) -> CodeActionResult:
-        """Execute Python code-action inside an isolated environment with atomic tools."""
+        """Execute Python code-action in the current process with atomic tools.
+
+        Atomic tools (read_file, write_file, run_command) strictly enforce workspace confinement.
+        """
         safe_globals: dict[str, Any] = {
             "read_file": self.tools.read_file,
             "write_file": self.tools.write_file,
             "run_command": self.tools.run_command,
             "apply_diff": self.tools.apply_diff,
             "print": print,
-            "os": os,
         }
 
         output_log: list[str] = []

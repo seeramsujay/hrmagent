@@ -589,4 +589,10 @@ def create_app(
     return app
 
 
-app = create_app(mode="mock")
+app = create_app(
+    mode=os.environ.get("HRM_MODE", "mock"),
+    device=os.environ.get("HRM_DEVICE", "auto"),
+    role1_path=os.environ.get("HRM_ROLE1_PATH"),
+    role2_path=os.environ.get("HRM_ROLE2_PATH"),
+    api_key=os.environ.get("HRM_API_KEY"),
+)
