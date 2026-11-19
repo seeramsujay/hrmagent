@@ -10,21 +10,20 @@ Configured with:
 """
 
 import os
-import sys
+from typing import Any
+
 import yaml
-from pathlib import Path
-from typing import Optional, Dict, Any
 
 try:
     import torch
+    from datasets import load_dataset
+    from peft import LoraConfig, TaskType, get_peft_model
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,
-        TrainingArguments,
         DataCollatorForSeq2Seq,
+        TrainingArguments,
     )
-    from peft import LoraConfig, get_peft_model, TaskType
-    from datasets import load_dataset
 except ImportError:
     torch = None
 
@@ -33,6 +32,7 @@ def apply_liger_cross_entropy():
     """Apply Liger chunked cross-entropy kernel to Qwen models for memory efficiency."""
     try:
         from liger_kernel.transformers import apply_liger_kernel_to_qwen2
+
         apply_liger_kernel_to_qwen2()
         print("[HRM Training] Applied Liger chunked cross-entropy kernel for Qwen2.")
     except Exception as e:
@@ -64,23 +64,27 @@ def train_sft(
     train_data_path: str,
     output_dir: str = "outputs/checkpoints",
     config_path: str = "configs/training.yaml",
+    epochs: int | None = None,
+    learning_rate: float | None = None,
+    batch_size: int | None = None,
+    grad_accum: int | None = None,
 ) -> str:
-    """Run bf16 LoRA SFT training within the 10GB RTX 3080 VRAM budget."""
+    """Run bf16 LoRA SFT training within the 10GB RTX 3080 / 6GB RTX 4050 VRAM budget."""
     if torch is None:
         raise RuntimeError("PyTorch and Transformers are required for training.")
 
     # Load YAML hyperparameters if available
-    train_cfg: Dict[str, Any] = {}
+    train_cfg: dict[str, Any] = {}
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
             train_cfg = cfg.get("training", {})
 
     max_seq_len = train_cfg.get("max_seq_length", 2048)
-    lr = train_cfg.get("learning_rate", 2e-4)
-    batch_size = train_cfg.get("per_device_train_batch_size", 1)
-    grad_accum = train_cfg.get("gradient_accumulation_steps", 16)
-    epochs = train_cfg.get("num_train_epochs", 3)
+    lr = learning_rate if learning_rate is not None else train_cfg.get("learning_rate", 2e-4)
+    bs = batch_size if batch_size is not None else train_cfg.get("per_device_train_batch_size", 1)
+    ga = grad_accum if grad_accum is not None else train_cfg.get("gradient_accumulation_steps", 4)
+    ep = epochs if epochs is not None else train_cfg.get("num_train_epochs", 3)
     use_bf16 = train_cfg.get("bf16", True) and torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 
     if train_cfg.get("use_liger_kernel", True):
@@ -101,7 +105,7 @@ def train_sft(
         trust_remote_code=True,
     )
 
-    # Enable gradient checkpointing to keep VRAM usage < 6.5 GB
+    # Enable gradient checkpointing to keep VRAM usage < 4.5 GB
     model.gradient_checkpointing_enable()
 
     # Wrap model with LoRA
@@ -115,38 +119,70 @@ def train_sft(
     def tokenize_fn(examples):
         prompts = examples["prompt"]
         completions = examples["completion"]
-        full_texts = [p + "\n" + c for p, c in zip(prompts, completions)]
-        tokens = tokenizer(
-            full_texts,
-            truncation=True,
-            max_length=max_seq_len,
-            padding=False,
-        )
-        tokens["labels"] = tokens["input_ids"].copy()
-        return tokens
+        input_ids_list = []
+        labels_list = []
+        attention_mask_list = []
+
+        min_completion_len = 32
+        max_prompt_len = max(64, max_seq_len - min_completion_len)
+
+        for p, c in zip(prompts, completions):
+            # Reserve capacity for completion to guarantee supervised tokens
+            prompt_enc = tokenizer(p + "\n", truncation=True, max_length=max_prompt_len, padding=False)
+            prompt_ids = prompt_enc["input_ids"]
+            comp_enc = tokenizer(c, truncation=True, max_length=max_seq_len - len(prompt_ids), padding=False)
+            comp_ids = comp_enc["input_ids"]
+
+            # If completion is completely empty, provide at least the eos token
+            if not comp_ids:
+                comp_ids = [tokenizer.eos_token_id or 0]
+
+            input_ids = prompt_ids + comp_ids
+            attn_mask = [1] * len(input_ids)
+            labels = [-100] * len(prompt_ids) + list(comp_ids)
+
+            # Ensure truncation to max_seq_len and at least one supervised completion token
+            if len(input_ids) > max_seq_len:
+                input_ids = input_ids[:max_seq_len]
+                attn_mask = attn_mask[:max_seq_len]
+                labels = labels[:max_seq_len]
+
+            # Guarantee at least one valid label
+            if not any(lbl != -100 for lbl in labels):
+                labels[-1] = input_ids[-1]
+
+            input_ids_list.append(input_ids)
+            labels_list.append(labels)
+            attention_mask_list.append(attn_mask)
+
+        return {
+            "input_ids": input_ids_list,
+            "labels": labels_list,
+            "attention_mask": attention_mask_list,
+        }
 
     tokenized_dataset = raw_dataset.map(tokenize_fn, batched=True, remove_columns=raw_dataset.column_names)
 
     training_args = TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=batch_size,
-        gradient_accumulation_steps=grad_accum,
-        num_train_epochs=epochs,
+        per_device_train_batch_size=bs,
+        gradient_accumulation_steps=ga,
+        num_train_epochs=ep,
         learning_rate=lr,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.03,
+        warmup_steps=1,
         weight_decay=0.01,
         bf16=use_bf16,
         fp16=False,
         optim="adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
         gradient_checkpointing=True,
-        logging_steps=10,
-        save_strategy="steps",
-        save_steps=250,
+        logging_steps=1,
+        save_strategy="epoch",
         save_total_limit=2,
     )
 
     from transformers import Trainer
+
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -169,10 +205,13 @@ def train_dpo(
     adapter_path: str,
     dpo_data_path: str,
     output_dir: str = "outputs/checkpoints_dpo",
+    epochs: int | None = None,
+    learning_rate: float | None = None,
+    grad_accum: int | None = None,
 ) -> str:
     """Run DPO training using PEFT adapter-disabled reference model (no duplicate weights in VRAM)."""
     try:
-        from trl import DPOTrainer, DPOConfig
+        from trl import DPOConfig, DPOTrainer
     except ImportError:
         raise RuntimeError("TRL is required for DPO training. Install via `uv pip install trl`.")
 
@@ -190,36 +229,52 @@ def train_dpo(
         trust_remote_code=True,
     )
     from peft import PeftModel
+
     model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
 
     dpo_dataset = load_dataset("json", data_files=dpo_data_path, split="train")
 
+    ep = epochs if epochs is not None else 2
+    lr = learning_rate if learning_rate is not None else 5e-5
+    ga = grad_accum if grad_accum is not None else 4
+
     dpo_config = DPOConfig(
         output_dir=output_dir,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=16,
-        num_train_epochs=2,
-        learning_rate=5e-5,
+        gradient_accumulation_steps=ga,
+        num_train_epochs=ep,
+        learning_rate=lr,
         bf16=use_bf16,
         optim="adamw_8bit" if torch.cuda.is_available() else "adamw_torch",
         gradient_checkpointing=True,
-        logging_steps=10,
-    )
-
-    # When ref_model=None, DPOTrainer disables adapter during ref forward pass
-    # saving ~3-4 GB VRAM and fitting easily in 10 GB VRAM!
-    trainer = DPOTrainer(
-        model=model,
-        ref_model=None,
-        args=dpo_config,
-        train_dataset=dpo_dataset,
-        tokenizer=tokenizer,
+        logging_steps=1,
+        save_strategy="epoch",
         max_length=2048,
     )
+
+    import inspect
+
+    dpo_kwargs = {
+        "model": model,
+        "ref_model": None,
+        "args": dpo_config,
+        "train_dataset": dpo_dataset,
+    }
+    sig = inspect.signature(DPOTrainer.__init__)
+    if "processing_class" in sig.parameters:
+        dpo_kwargs["processing_class"] = tokenizer
+    else:
+        dpo_kwargs["tokenizer"] = tokenizer
+
+    # When ref_model=None, DPOTrainer disables adapter during ref forward pass
+    # saving ~3-4 GB VRAM and fitting easily in 6-10 GB VRAM!
+    trainer = DPOTrainer(**dpo_kwargs)
 
     print("[HRM DPO] Starting adapter-disabled reference DPO training...")
     trainer.train()
 
     final_dpo_path = os.path.join(output_dir, "final_dpo_adapter")
     model.save_pretrained(final_dpo_path)
+    tokenizer.save_pretrained(final_dpo_path)
+    print(f"[HRM DPO] Saved DPO adapter to {final_dpo_path}")
     return final_dpo_path

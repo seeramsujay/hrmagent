@@ -1,0 +1,18 @@
+{
+  "id": "CC-FLOW017",
+  "title": "Second Largest Number",
+  "description": "Three numbers A, B and C are the inputs. Write a program to find second largest among three numbers.",
+  "input_format": "The first line contains an integer T, total number of testcases. Then follow T lines, each line contains three integers A, B and C.",
+  "output_format": "Display the second largest among A, B and C.",
+  "constraints": "1 <= T <= 1000, 1 <= A,B,C <= 1000000",
+  "time_limit_ms": 1000,
+  "memory_limit_mb": 256,
+  "sample_inputs": [
+    "3\n120 11 400\n10213 312 10\n10 3 450\n"
+  ],
+  "sample_outputs": [
+    "120\n312\n10\n"
+  ],
+  "rating": 1000,
+  "tags": ["greedy", "conditionals"]
+}

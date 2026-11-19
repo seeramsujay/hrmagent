@@ -2,30 +2,42 @@
 language: en-US
 early_access: false
 reviews:
-  profile: chill
+  profile: assertive
+  request_changes_workflow: true
   high_level_summary: true
   poem: false
-  collapse_walkthrough: true
+  collapse_walkthrough: false
   auto_review:
     enabled: true
-    drafts: false
+    drafts: true
     auto_incremental_review: true
   path_filters:
-    - "!data/**"
     - "!outputs/**"
-    - "!grammars/**"
   path_instructions:
     - path: "src/judge/sandbox.py"
       instructions: |
-        Scrutinize sandbox isolation, resource limits, and timeout handling.
-        Flag any path that can escape the sandbox or leave child processes.
+        Scrutinize sandbox isolation, resource limits, signal handling, and timeout handling.
+        Ensure no parent COW memory inheritance occurs and child processes are never leaked.
     - path: "src/hrm_agent/patcher.py"
       instructions: |
-        Check unified-diff parsing for off-by-one errors and unsafe writes.
+        Check unified-diff parsing for off-by-one line errors, hunk offsets, and atomic writes.
     - path: "src/hrm_agent/llm_engine.py"
       instructions: |
-        Verify GBNF grammar caching and q8_0 KV-cache configuration.
+        Verify GBNF grammar constraints, multi-adapter PEFT switching, and CUDA/CPU device safety.
+    - path: "src/hrm_agent/server.py"
+      instructions: |
+        Scrutinize OpenAI API specification compliance, input validation, and async error handling.
+    - path: "src/training/dataset_miner.py"
+      instructions: |
+        Ensure input formats, output formats, and constraints are strictly parsed from real problems.
+        Ensure verified AC verdicts and authentic trajectory diffs without synthetic placeholders.
+    - path: "src/training/train_sft_lora.py"
+      instructions: |
+        Verify prompt-loss masking (-100 label tokens), optimizer state, and DPO margin calculation.
+    - path: "tests/**"
+      instructions: |
+        Verify test assertions, boundary edge cases, game theory problem coverage, and harness verification.
   pre_merge_checks:
     title:
-      mode: warning
-      requirements: "Use Conventional Commits (feat:, fix:, chore:)."
+      mode: error
+      requirements: "Use Conventional Commits (feat:, fix:, chore:, refactor:, test:)."

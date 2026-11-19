@@ -9,28 +9,26 @@ Tests:
 6. Stratified benchmark evaluator & 3-way ablation metrics across 5 synthetic problems
 """
 
-import os
 import json
-import pytest
+import os
 from pathlib import Path
 
 import llama_cpp
-from hrm_agent.schemas import (
-    ProblemSpec,
-    PlannerBlueprint,
-    JevVerdict,
-    ExecutionTelemetry,
-)
-from hrm_agent.patcher import apply_patch, parse_unified_diff, validate_syntax_balance
-from hrm_agent.llm_engine import MockLLMEngine
+
 from hrm_agent.hrm_loop import HRMAgentLoop
-from judge.sandbox import SandboxRunner
-from judge.fuzz_oracle import (
-    FuzzCaseGenerator,
-    DifferentialOracle,
-    FloatToleranceChecker,
+from hrm_agent.llm_engine import MockLLMEngine
+from hrm_agent.patcher import apply_patch, validate_syntax_balance
+from hrm_agent.schemas import (
+    JevVerdict,
+    PlannerBlueprint,
+    ProblemSpec,
 )
 from judge.benchmark_eval import BenchmarkEvaluator
+from judge.fuzz_oracle import (
+    FloatToleranceChecker,
+    FuzzCaseGenerator,
+)
+from judge.sandbox import SandboxRunner
 
 
 # =====================================================================
@@ -244,12 +242,7 @@ def test_sandbox_verdict_tle():
     """Verify TLE verdict on an infinite loop."""
     sandbox = SandboxRunner()
     loop_code = (
-        "#include <iostream>\n"
-        "int main() {\n"
-        "    volatile int x = 0;\n"
-        "    while (true) { x++; }\n"
-        "    return 0;\n"
-        "}\n"
+        "#include <iostream>\nint main() {\n    volatile int x = 0;\n    while (true) { x++; }\n    return 0;\n}\n"
     )
     telem = sandbox.run_code(
         code=loop_code,
@@ -264,14 +257,7 @@ def test_sandbox_verdict_tle():
 def test_sandbox_verdict_re():
     """Verify RE verdict on division by zero or abort."""
     sandbox = SandboxRunner()
-    crash_code = (
-        "#include <iostream>\n"
-        "#include <cstdlib>\n"
-        "int main() {\n"
-        "    abort();\n"
-        "    return 0;\n"
-        "}\n"
-    )
+    crash_code = "#include <iostream>\n#include <cstdlib>\nint main() {\n    abort();\n    return 0;\n}\n"
     telem = sandbox.run_code(
         code=crash_code,
         language="cpp",

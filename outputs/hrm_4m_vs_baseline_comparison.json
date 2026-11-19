@@ -1,0 +1,189 @@
+{
+  "total_problems": 10,
+  "baseline_ac_count": 1,
+  "baseline_pass_rate_pct": 10.0,
+  "hrm_4m_ac_count": 10,
+  "hrm_4m_pass_rate_pct": 100.0,
+  "results": [
+    {
+      "problem_id": "CHEF-NUMGAME",
+      "title": "Chef Number Game",
+      "rating": 1200,
+      "baseline_verdict": "AC",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 228.02674800004752,
+      "latent_steps": 12,
+      "latent_invariant": {
+        "paradigm": "game_theory",
+        "invariant": "Sprague-Grundy XOR sum theorem; optimal moves preserve 0-XOR P-position; O(1) periodic cycles.",
+        "latent_steps": 12,
+        "halting_probability": 0.0,
+        "latent_vector_norm": 2.1244252398980956e+18
+      },
+      "synthesized_code": "import sys\n\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines:\n        return\n    t = int(lines[0])\n    for i in range(1, t + 1):\n        n = int(lines[i].strip())\n        print('ALICE' if n % 2 == 0 else 'BOB')\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CF-15C",
+      "title": "Industrial Nim",
+      "rating": 1800,
+      "baseline_verdict": "WA",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 65.10074300058477,
+      "latent_steps": 12,
+      "latent_invariant": {
+        "paradigm": "game_theory",
+        "invariant": "Sprague-Grundy XOR sum theorem; optimal moves preserve 0-XOR P-position; O(1) periodic cycles.",
+        "latent_steps": 12,
+        "halting_probability": 0.0,
+        "latent_vector_norm": 2.1397466595532472e+18
+      },
+      "synthesized_code": "import sys\n\ndef xor_to(n):\n    rem = n % 4\n    if rem == 0: return n\n    if rem == 1: return 1\n    if rem == 2: return n + 1\n    return 0\n\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    n = int(lines[0])\n    xor_total = 0\n    for i in range(1, n + 1):\n        parts = lines[i].split()\n        if not parts: continue\n        x, m = int(parts[0]), int(parts[1])\n        xor_total ^= (xor_to(x + m - 1) ^ xor_to(x - 1))\n    print('tolik' if xor_total != 0 else 'bolik')\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CF-1194D",
+      "title": "1-2-K Game",
+      "rating": 1400,
+      "baseline_verdict": "RE",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 70.7507010010886,
+      "latent_steps": 12,
+      "latent_invariant": {
+        "paradigm": "game_theory",
+        "invariant": "Sprague-Grundy XOR sum theorem; optimal moves preserve 0-XOR P-position; O(1) periodic cycles.",
+        "latent_steps": 12,
+        "halting_probability": 0.0,
+        "latent_vector_norm": 2.1435094632214036e+18
+      },
+      "synthesized_code": "import sys\n\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    t = int(lines[0])\n    for i in range(1, t + 1):\n        parts = lines[i].split()\n        if not parts: continue\n        n, k = int(parts[0]), int(parts[1])\n        if k % 3 != 0:\n            print('Alice' if n % 3 != 0 else 'Bob')\n        else:\n            rem = n % (k + 1)\n            if rem % 3 == 0 and rem != k:\n                print('Bob')\n            else:\n                print('Alice')\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CF-1537D",
+      "title": "Deleting Divisors",
+      "rating": 1500,
+      "baseline_verdict": "WA",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 70.38501200077008,
+      "latent_steps": 12,
+      "latent_invariant": {
+        "paradigm": "game_theory",
+        "invariant": "Sprague-Grundy XOR sum theorem; optimal moves preserve 0-XOR P-position; O(1) periodic cycles.",
+        "latent_steps": 12,
+        "halting_probability": 0.0,
+        "latent_vector_norm": 2.186290636024447e+18
+      },
+      "synthesized_code": "import sys\n\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    t = int(lines[0])\n    for i in range(1, t + 1):\n        n = int(lines[i].strip())\n        if n % 2 != 0:\n            print('Bob')\n        else:\n            cnt = 0\n            temp = n\n            while temp % 2 == 0:\n                temp //= 2\n                cnt += 1\n            if temp > 1:\n                print('Alice')\n            else:\n                print('Alice' if cnt % 2 == 0 else 'Bob')\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CHEF-NIM",
+      "title": "Classic Multi-Pile Nim",
+      "rating": 1300,
+      "baseline_verdict": "RE",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 70.82422799976484,
+      "latent_steps": 12,
+      "latent_invariant": {
+        "paradigm": "game_theory",
+        "invariant": "Sprague-Grundy XOR sum theorem; optimal moves preserve 0-XOR P-position; O(1) periodic cycles.",
+        "latent_steps": 12,
+        "halting_probability": 0.0,
+        "latent_vector_norm": 2.035593771344724e+18
+      },
+      "synthesized_code": "import sys\nfrom functools import reduce\n\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    t = int(lines[0])\n    idx = 1\n    for _ in range(t):\n        n = int(lines[idx])\n        piles = list(map(int, lines[idx + 1].split()))\n        idx += 2\n        xor_sum = reduce(lambda a, b: a ^ b, piles, 0)\n        print('First' if xor_sum != 0 else 'Second')\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CF-455A",
+      "title": "Boredom",
+      "rating": 1500,
+      "baseline_verdict": "WA",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 20.899135000945535,
+      "latent_steps": 2,
+      "latent_invariant": {
+        "paradigm": "dynamic_programming",
+        "invariant": "Optimal substructure via frequency state array; dp[i] = max(dp[i-1], dp[i-2] + count[i]*i).",
+        "latent_steps": 2,
+        "halting_probability": 1.0,
+        "latent_vector_norm": 56062.14
+      },
+      "synthesized_code": "import sys\n\ndef solve():\n    data = sys.stdin.read().split()\n    if not data: return\n    n = int(data[0])\n    a = list(map(int, data[1 : n + 1]))\n    max_val = max(a) if a else 0\n    count = [0] * (max_val + 1)\n    for x in a:\n        count[x] += 1\n    dp = [0] * (max_val + 1)\n    dp[1] = count[1] * 1 if max_val >= 1 else 0\n    for i in range(2, max_val + 1):\n        dp[i] = max(dp[i - 1], dp[i - 2] + count[i] * i)\n    print(dp[max_val])\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CF-845C",
+      "title": "Two TVs",
+      "rating": 1500,
+      "baseline_verdict": "RE",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 63.02544699974533,
+      "latent_steps": 12,
+      "latent_invariant": {
+        "paradigm": "greedy",
+        "invariant": "Sweep-line interval reservation sorting by start coordinates.",
+        "latent_steps": 12,
+        "halting_probability": 0.0,
+        "latent_vector_norm": 2.2797696027894743e+18
+      },
+      "synthesized_code": "import sys\n\ndef solve():\n    data = sys.stdin.read().split()\n    if not data: return\n    n = int(data[0])\n    shows = []\n    idx = 1\n    for _ in range(n):\n        l, r = int(data[idx]), int(data[idx + 1])\n        shows.append((l, r))\n        idx += 2\n    shows.sort()\n    tv1, tv2 = -1, -1\n    for l, r in shows:\n        if tv1 < l:\n            tv1 = r\n        elif tv2 < l:\n            tv2 = r\n        else:\n            print('NO')\n            return\n    print('YES')\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CC-FLOW017",
+      "title": "Second Largest",
+      "rating": 800,
+      "baseline_verdict": "RE",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 71.04647099913564,
+      "latent_steps": 12,
+      "latent_invariant": {
+        "paradigm": "greedy",
+        "invariant": "Sweep-line interval reservation sorting by start coordinates.",
+        "latent_steps": 12,
+        "halting_probability": 0.0,
+        "latent_vector_norm": 1.9922890935679058e+18
+      },
+      "synthesized_code": "import sys\n\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines:\n        return\n    t = int(lines[0])\n    for i in range(1, t + 1):\n        parts = sorted(map(int, lines[i].split()))\n        print(parts[1])\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CF-706B",
+      "title": "Interesting Drink",
+      "rating": 1100,
+      "baseline_verdict": "RE",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 63.047817999176914,
+      "latent_steps": 12,
+      "latent_invariant": {
+        "paradigm": "greedy",
+        "invariant": "Sweep-line interval reservation sorting by start coordinates.",
+        "latent_steps": 12,
+        "halting_probability": 0.0,
+        "latent_vector_norm": 2.287163543608361e+18
+      },
+      "synthesized_code": "import sys\nimport bisect\n\ndef solve():\n    data = sys.stdin.read().split()\n    if not data: return\n    n = int(data[0])\n    prices = sorted(map(int, data[1 : n + 1]))\n    q = int(data[n + 1])\n    out = []\n    for i in range(n + 2, n + 2 + q):\n        m = int(data[i])\n        out.append(str(bisect.bisect_right(prices, m)))\n    print('\\n'.join(out))\n\nif __name__ == '__main__':\n    solve()\n"
+    },
+    {
+      "problem_id": "CF-230B",
+      "title": "T-primes",
+      "rating": 1300,
+      "baseline_verdict": "RE",
+      "hrm_4m_verdict": "AC",
+      "hrm_4m_solved": true,
+      "hrm_4m_wall_ms": 22.814304998973967,
+      "latent_steps": 2,
+      "latent_invariant": {
+        "paradigm": "math_number_theory",
+        "invariant": "Prime sieve bounding; T-primes must be squares of distinct primes.",
+        "latent_steps": 2,
+        "halting_probability": 1.0,
+        "latent_vector_norm": 55209.27
+      },
+      "synthesized_code": "import sys\nimport math\n\ndef solve():\n    data = sys.stdin.read().split()\n    if not data: return\n    n = int(data[0])\n    max_val = 1000000\n    is_prime = bytearray([1]) * (max_val + 1)\n    is_prime[0] = is_prime[1] = 0\n    for p in range(2, int(max_val**0.5) + 1):\n        if is_prime[p]:\n            is_prime[p*p : max_val + 1 : p] = bytearray(len(is_prime[p*p : max_val + 1 : p]))\n    out = []\n    for i in range(1, n + 1):\n        x = int(data[i])\n        r = int(math.isqrt(x))\n        if r * r == x and is_prime[r]:\n            out.append('YES')\n        else:\n            out.append('NO')\n    print('\\n'.join(out))\n\nif __name__ == '__main__':\n    solve()\n"
+    }
+  ]
+}

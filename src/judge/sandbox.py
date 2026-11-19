@@ -7,15 +7,16 @@ CE, AC, WA, TLE, MLE, RE.
 """
 
 import os
-import sys
+import resource
 import shutil
+import signal
 import subprocess
+import sys
 import tempfile
 import time
-import signal
-import resource
 from pathlib import Path
-from typing import Optional, Tuple, List, Literal
+from typing import Literal
+
 from hrm_agent.schemas import ExecutionTelemetry, VerdictType
 
 
@@ -32,7 +33,11 @@ def detect_sandbox_engine() -> Literal["nsjail", "bwrap", "setrlimit"]:
     if shutil.which("bwrap"):
         try:
             # Probe if bwrap has permission to execute in this user environment
-            res = subprocess.run(["bwrap", "--ro-bind", "/bin", "/bin", "/bin/true"], capture_output=True, timeout=1.0)
+            res = subprocess.run(
+                ["bwrap", "--ro-bind", "/bin", "/bin", "/bin/true"],
+                capture_output=True,
+                timeout=1.0,
+            )
             if res.returncode == 0:
                 return "bwrap"
         except Exception:
@@ -51,8 +56,8 @@ class SandboxRunner:
 
     def __init__(
         self,
-        engine: Optional[Literal["nsjail", "bwrap", "setrlimit"]] = None,
-        cpu_affinity_mask: Optional[str] = None,
+        engine: Literal["nsjail", "bwrap", "setrlimit"] | None = None,
+        cpu_affinity_mask: str | None = None,
     ):
         self.engine = engine or detect_sandbox_engine()
         self.cpu_affinity_mask = cpu_affinity_mask
@@ -62,7 +67,7 @@ class SandboxRunner:
 
     def compile_cpp(
         self, source_path: Path, output_binary_path: Path, timeout_seconds: float = 10.0
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Compile C++20 source code with optimization and strict flags."""
         cmd = [
             "g++",
@@ -92,21 +97,189 @@ class SandboxRunner:
         except subprocess.TimeoutExpired:
             return False, f"Compilation timed out after {timeout_seconds}s"
         except Exception as e:
-            return False, f"Compilation failed with exception: {str(e)}"
+            return False, f"Compilation failed with exception: {e!s}"
 
     def _execute_with_wait4(
         self,
-        cmd: List[str],
+        cmd: list[str],
         input_data: str,
         time_limit_ms: int,
         memory_limit_mb: int,
         cwd: Path,
     ) -> ExecutionTelemetry:
-        """Execute command directly using fork + preexec setrlimit + wait4 for exact telemetry."""
-        mem_bytes = memory_limit_mb * 1024 * 1024
-        # Add safety headroom to address space for dynamic loader and glibc
-        rlimit_as_bytes = mem_bytes + 64 * 1024 * 1024
-        cpu_limit_secs = max(1, int(time_limit_ms / 1000.0) + 1)
+        """Execute command in isolated subprocess with resource limits and telemetry extraction."""
+        wall_limit_secs = max(0.5, (time_limit_ms / 1000.0) * 2.5 + 0.5)
+        mem_bytes = (memory_limit_mb + 64) * 1024 * 1024
+        cpu_secs = max(1, int(time_limit_ms / 1000.0) + 1)
+
+        time_bin = shutil.which("time")
+        prlimit_bin = shutil.which("prlimit")
+
+        # Preferred execution path: wrap with prlimit (and optionally /usr/bin/time -v) to enforce
+        # exact resource bounds while avoiding Python fork COW memory overhead
+        if prlimit_bin:
+            wrapped_cmd: list[str] = []
+            if time_bin:
+                wrapped_cmd.extend([time_bin, "-v"])
+            wrapped_cmd.extend([prlimit_bin, f"--as={mem_bytes}", f"--cpu={cpu_secs}"])
+            if self.cpu_affinity_mask and shutil.which("taskset"):
+                wrapped_cmd = ["taskset", "-c", self.cpu_affinity_mask] + wrapped_cmd
+            wrapped_cmd.extend(cmd)
+
+            max_output_bytes = 16 * 1024 * 1024  # 16 MB bound on total output
+            start_wall = time.perf_counter()
+            ru_before = resource.getrusage(resource.RUSAGE_CHILDREN)
+            proc = None
+            try:
+                proc = subprocess.Popen(
+                    wrapped_cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=False,
+                    cwd=str(cwd),
+                    start_new_session=True,
+                )
+                input_bytes = input_data.encode("utf-8") if isinstance(input_data, str) else input_data
+                raw_stdout_bytes, raw_stderr_bytes = proc.communicate(input=input_bytes, timeout=wall_limit_secs)
+                wall_clock_ms = (time.perf_counter() - start_wall) * 1000.0
+                exit_code = proc.returncode
+                ru_after = resource.getrusage(resource.RUSAGE_CHILDREN)
+
+                # Check bounded output limit
+                if len(raw_stdout_bytes) + len(raw_stderr_bytes) > max_output_bytes:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                    return ExecutionTelemetry(
+                        verdict="RE",
+                        wall_clock_ms=round(wall_clock_ms, 2),
+                        cpu_time_ms=round(wall_clock_ms, 2),
+                        peak_rss_kb=0,
+                        exit_code=-1,
+                        stdout="",
+                        stderr="Output limit exceeded (exceeded 16MB budget)",
+                        sandbox_engine="setrlimit",
+                    )
+
+                stdout_str = raw_stdout_bytes.decode("utf-8", errors="replace")
+                raw_stderr = raw_stderr_bytes.decode("utf-8", errors="replace")
+
+                # Parse metrics from /usr/bin/time -v or collect from getrusage in prlimit-only path
+                peak_rss_kb = 0
+                user_time_sec = 0.0
+                sys_time_sec = 0.0
+                clean_stderr_lines = []
+
+                if time_bin:
+                    is_time_section = False
+                    for line in raw_stderr.splitlines():
+                        if "Command being timed:" in line:
+                            is_time_section = True
+                            continue
+                        if is_time_section:
+                            if "Maximum resident set size" in line:
+                                try:
+                                    peak_rss_kb = int(line.split(":")[-1].strip())
+                                except Exception:
+                                    pass
+                            elif "User time" in line:
+                                try:
+                                    user_time_sec = float(line.split(":")[-1].strip())
+                                except Exception:
+                                    pass
+                            elif "System time" in line:
+                                try:
+                                    sys_time_sec = float(line.split(":")[-1].strip())
+                                except Exception:
+                                    pass
+                        else:
+                            clean_stderr_lines.append(line)
+                    cpu_time_ms = (user_time_sec + sys_time_sec) * 1000.0
+                    stderr_str = "\n".join(clean_stderr_lines)
+                else:
+                    # In prlimit-only mode without /usr/bin/time, compute resource metrics from rusage delta
+                    delta_utime = max(0.0, ru_after.ru_utime - ru_before.ru_utime)
+                    delta_stime = max(0.0, ru_after.ru_stime - ru_before.ru_stime)
+                    cpu_time_ms = (delta_utime + delta_stime) * 1000.0
+                    peak_rss_kb = ru_after.ru_maxrss
+                    stderr_str = raw_stderr
+
+                verdict: VerdictType = "AC"
+                if exit_code != 0:
+                    if exit_code in (137, 128 + signal.SIGKILL, -signal.SIGKILL):
+                        verdict = "TLE"
+                    elif exit_code in (134, 139, 128 + signal.SIGABRT, 128 + signal.SIGSEGV):
+                        if (
+                            peak_rss_kb > memory_limit_mb * 1024
+                            or "MemoryError" in stderr_str
+                            or "std::bad_alloc" in stderr_str
+                        ):
+                            verdict = "MLE"
+                        else:
+                            verdict = "RE"
+                    elif exit_code in (152, 128 + signal.SIGXCPU):
+                        verdict = "TLE"
+                    else:
+                        if (
+                            peak_rss_kb > memory_limit_mb * 1024
+                            or "MemoryError" in stderr_str
+                            or "std::bad_alloc" in stderr_str
+                        ):
+                            verdict = "MLE"
+                        else:
+                            verdict = "RE"
+
+                if cpu_time_ms > time_limit_ms or wall_clock_ms > (time_limit_ms * 2.0):
+                    verdict = "TLE"
+                elif peak_rss_kb > memory_limit_mb * 1024:
+                    verdict = "MLE"
+
+                return ExecutionTelemetry(
+                    verdict=verdict,
+                    wall_clock_ms=round(wall_clock_ms, 2),
+                    cpu_time_ms=round(cpu_time_ms, 2),
+                    peak_rss_kb=peak_rss_kb,
+                    exit_code=exit_code,
+                    stdout=stdout_str,
+                    stderr=stderr_str,
+                    sandbox_engine="setrlimit",
+                )
+            except subprocess.TimeoutExpired:
+                if proc is not None:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+                    try:
+                        if proc.stdin:
+                            proc.stdin.close()
+                        if proc.stdout:
+                            proc.stdout.close()
+                        if proc.stderr:
+                            proc.stderr.close()
+                    except Exception:
+                        pass
+                    try:
+                        proc.wait(timeout=1.0)
+                    except Exception:
+                        pass
+                wall_clock_ms = (time.perf_counter() - start_wall) * 1000.0
+                return ExecutionTelemetry(
+                    verdict="TLE",
+                    wall_clock_ms=round(wall_clock_ms, 2),
+                    cpu_time_ms=float(time_limit_ms),
+                    peak_rss_kb=0,
+                    exit_code=-signal.SIGKILL,
+                    stdout="",
+                    stderr="Wall clock execution limit exceeded",
+                    sandbox_engine="setrlimit",
+                )
+
+        # Fallback to direct wait4 fork if external tools are completely missing
+        rlimit_as_bytes = mem_bytes
+        cpu_limit_secs = cpu_secs
 
         read_in, write_in = os.pipe()
         read_out, write_out = os.pipe()
@@ -116,7 +289,6 @@ class SandboxRunner:
         pid = os.fork()
 
         if pid == 0:
-            # Child process
             try:
                 os.close(write_in)
                 os.close(read_out)
@@ -130,25 +302,11 @@ class SandboxRunner:
                 os.close(write_out)
                 os.close(write_err)
 
-                # Set core dump size to 0
                 resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-
-                # Apply CPU time limit
                 if hasattr(resource, "RLIMIT_CPU"):
                     resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit_secs, cpu_limit_secs + 1))
-
-                # Apply Address Space limit
                 if hasattr(resource, "RLIMIT_AS"):
                     resource.setrlimit(resource.RLIMIT_AS, (rlimit_as_bytes, rlimit_as_bytes))
-
-                # Pin CPU affinity if requested
-                if self.cpu_affinity_mask and hasattr(os, "sched_setaffinity"):
-                    try:
-                        cores = [int(c.strip()) for c in self.cpu_affinity_mask.replace("-", ",").split(",") if c.strip().isdigit()]
-                        if cores:
-                            os.sched_setaffinity(0, set(cores))
-                    except Exception:
-                        pass
 
                 os.chdir(str(cwd))
                 os.execvp(cmd[0], cmd)
@@ -156,12 +314,10 @@ class SandboxRunner:
                 sys.stderr.write(f"Exec failed: {e}\n")
                 os._exit(127)
 
-        # Parent process
         os.close(read_in)
         os.close(write_out)
         os.close(write_err)
 
-        # Write input data to child stdin non-blocking or chunked
         try:
             if input_data:
                 os.write(write_in, input_data.encode("utf-8"))
@@ -170,16 +326,13 @@ class SandboxRunner:
         finally:
             os.close(write_in)
 
-        # Monitor child with wall-clock timeout
-        wall_limit_secs = (time_limit_ms / 1000.0) * 2.5 + 0.5
-        terminated = False
         status = 0
         rusage = None
+        terminated = False
 
         while True:
             elapsed = time.perf_counter() - start_wall
             if elapsed > wall_limit_secs:
-                # Timed out, kill child
                 try:
                     os.kill(pid, signal.SIGKILL)
                 except ProcessLookupError:
@@ -197,7 +350,6 @@ class SandboxRunner:
         end_wall = time.perf_counter()
         wall_clock_ms = (end_wall - start_wall) * 1000.0
 
-        # Read stdout and stderr
         out_bytes = b""
         err_bytes = b""
         try:
@@ -229,10 +381,10 @@ class SandboxRunner:
         peak_rss_kb = 0
         if rusage:
             cpu_time_ms = (rusage.ru_utime + rusage.ru_stime) * 1000.0
-            peak_rss_kb = rusage.ru_maxrss  # On Linux ru_maxrss is in KiB
+            peak_rss_kb = rusage.ru_maxrss
 
         exit_code = 0
-        verdict: VerdictType = "AC"
+        verdict = "AC"
 
         if terminated:
             verdict = "TLE"
@@ -243,16 +395,9 @@ class SandboxRunner:
             if sig == signal.SIGXCPU:
                 verdict = "TLE"
             elif sig in (signal.SIGSEGV, signal.SIGABRT, signal.SIGBUS):
-                # Check if caused by memory limit
-                if peak_rss_kb > memory_limit_mb * 1024:
-                    verdict = "MLE"
-                else:
-                    verdict = "RE"
+                verdict = "RE"
             elif sig == signal.SIGKILL:
-                if peak_rss_kb > memory_limit_mb * 1024:
-                    verdict = "MLE"
-                else:
-                    verdict = "TLE"
+                verdict = "TLE"
             else:
                 verdict = "RE"
         elif os.WIFEXITED(status):
@@ -262,11 +407,11 @@ class SandboxRunner:
         else:
             verdict = "RE"
 
-        # Check soft thresholds
-        if cpu_time_ms > time_limit_ms or wall_clock_ms > (time_limit_ms * 2.0):
-            verdict = "TLE"
-        elif peak_rss_kb > memory_limit_mb * 1024:
-            verdict = "MLE"
+        if verdict == "AC":
+            if cpu_time_ms > time_limit_ms or wall_clock_ms > (time_limit_ms * 2.0):
+                verdict = "TLE"
+            elif peak_rss_kb > memory_limit_mb * 1024:
+                verdict = "MLE"
 
         return ExecutionTelemetry(
             verdict=verdict,
@@ -281,7 +426,7 @@ class SandboxRunner:
 
     def _execute_bwrap(
         self,
-        cmd: List[str],
+        cmd: list[str],
         input_data: str,
         time_limit_ms: int,
         memory_limit_mb: int,
@@ -295,13 +440,24 @@ class SandboxRunner:
         bwrap_cmd = [
             self.bwrap_bin,
             "--unshare-all",
-            "--ro-bind", "/usr", "/usr",
-            "--ro-bind", "/lib", "/lib",
-            "--ro-bind", "/bin", "/bin",
-            "--proc", "/proc",
-            "--dev", "/dev",
-            "--bind", str(cwd), str(cwd),
-            "--chdir", str(cwd),
+            "--ro-bind",
+            "/usr",
+            "/usr",
+            "--ro-bind",
+            "/lib",
+            "/lib",
+            "--ro-bind",
+            "/bin",
+            "/bin",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--bind",
+            str(cwd),
+            str(cwd),
+            "--chdir",
+            str(cwd),
         ]
         if os.path.exists("/lib64"):
             bwrap_cmd.extend(["--ro-bind", "/lib64", "/lib64"])
@@ -376,7 +532,7 @@ class SandboxRunner:
 
     def _execute_nsjail(
         self,
-        cmd: List[str],
+        cmd: list[str],
         input_data: str,
         time_limit_ms: int,
         memory_limit_mb: int,
@@ -388,15 +544,23 @@ class SandboxRunner:
 
         nsjail_cmd = [
             self.nsjail_bin,
-            "--mode", "standalone",
-            "--chroot", "/",
-            "--user", "65534",
-            "--group", "65534",
-            "--time_limit", str(time_limit_secs),
-            "--cgroup_mem_max", str(mem_bytes),
-            "--max_cpus", "1",
+            "--mode",
+            "standalone",
+            "--chroot",
+            "/",
+            "--user",
+            "65534",
+            "--group",
+            "65534",
+            "--time_limit",
+            str(time_limit_secs),
+            "--cgroup_mem_max",
+            str(mem_bytes),
+            "--max_cpus",
+            "1",
             "--disable_proc",
-            "--cwd", str(cwd),
+            "--cwd",
+            str(cwd),
             "--",
         ] + cmd
 
@@ -459,10 +623,10 @@ class SandboxRunner:
         code: str,
         language: Literal["cpp", "python"],
         input_data: str,
-        expected_output: Optional[str] = None,
+        expected_output: str | None = None,
         time_limit_ms: int = 2000,
         memory_limit_mb: int = 256,
-        custom_checker: Optional[str] = None,
+        custom_checker: str | None = None,
     ) -> ExecutionTelemetry:
         """Run code in the sandboxed environment and verify against expected output."""
         with tempfile.TemporaryDirectory(prefix="hrm_sandbox_") as tmpdir:
@@ -503,7 +667,13 @@ class SandboxRunner:
             if telemetry.verdict == "AC" and expected_output is not None:
                 if custom_checker:
                     # Run custom checker script
-                    passed = self._run_custom_checker(custom_checker, input_data, telemetry.stdout, expected_output, work_dir)
+                    passed = self._run_custom_checker(
+                        custom_checker,
+                        input_data,
+                        telemetry.stdout,
+                        expected_output,
+                        work_dir,
+                    )
                     if not passed:
                         telemetry.verdict = "WA"
                 else:
@@ -522,7 +692,7 @@ class SandboxRunner:
         expected_output: str,
         cwd: Path,
     ) -> bool:
-        """Run custom checker script. Checker receives files or stdin and exits 0 for AC."""
+        """Run custom checker script safely inside the isolated execution sandbox."""
         checker_file = cwd / "checker.py"
         checker_file.write_text(checker_code, encoding="utf-8")
 
@@ -535,9 +705,21 @@ class SandboxRunner:
         ans_file = cwd / "expected_out.txt"
         ans_file.write_text(expected_output, encoding="utf-8")
 
-        cmd = [sys.executable, str(checker_file), str(in_file), str(out_file), str(ans_file)]
+        cmd = [
+            sys.executable,
+            str(checker_file),
+            str(in_file),
+            str(out_file),
+            str(ans_file),
+        ]
         try:
-            res = subprocess.run(cmd, capture_output=True, timeout=5.0, cwd=str(cwd))
-            return res.returncode == 0
+            telemetry = self._execute_with_wait4(
+                cmd=cmd,
+                input_data="",
+                time_limit_ms=3000,
+                memory_limit_mb=256,
+                cwd=cwd,
+            )
+            return telemetry.verdict == "AC" and telemetry.exit_code == 0
         except Exception:
             return False

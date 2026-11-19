@@ -5,11 +5,10 @@ inputs (N=N_max, 10^9 overflow, star/line graphs), and executes multi-candidate
 differential oracle consensus.
 """
 
-import math
 import random
 import re
-from typing import List, Dict, Optional, Tuple, Callable
-from hrm_agent.schemas import ProblemSpec, ExecutionTelemetry
+
+from hrm_agent.schemas import ExecutionTelemetry, ProblemSpec
 from judge.sandbox import SandboxRunner, normalize_output
 
 
@@ -17,7 +16,7 @@ class FuzzCaseGenerator:
     """Generates property-based, boundary, and stress test cases for CP problems."""
 
     @staticmethod
-    def extract_bounds(constraints: str) -> Dict[str, int]:
+    def extract_bounds(constraints: str) -> dict[str, int]:
         """Heuristically extract upper bounds for N and value ranges from constraints text."""
         bounds = {"n_max": 200000, "val_max": 1000000000, "t_max": 100}
 
@@ -27,7 +26,7 @@ class FuzzCaseGenerator:
             base = int(n_match.group(1))
             power = int(n_match.group(2)) if n_match.group(2) else 0
             if power > 0:
-                bounds["n_max"] = min(200000, base * (10 ** power))
+                bounds["n_max"] = min(200000, base * (10**power))
             else:
                 bounds["n_max"] = min(200000, base)
 
@@ -35,15 +34,15 @@ class FuzzCaseGenerator:
         if val_match:
             base = int(val_match.group(1))
             power = int(val_match.group(2)) if val_match.group(2) else 0
-            bounds["val_max"] = base * (10 ** power) if power > 0 else base
+            bounds["val_max"] = base * (10**power) if power > 0 else base
 
         return bounds
 
     @classmethod
-    def generate_boundary_cases(cls, spec: ProblemSpec) -> List[str]:
+    def generate_boundary_cases(cls, spec: ProblemSpec) -> list[str]:
         """Generate minimum boundary and edge cases (e.g. N=1, zeros, extremes)."""
         cases = []
-        bounds = cls.extract_bounds(spec.constraints)
+        cls.extract_bounds(spec.constraints)
 
         # Case 1: Minimal N=1
         cases.append("1\n1\n0\n")
@@ -109,8 +108,8 @@ class DifferentialOracle:
         code: str,
         language: str,
         spec: ProblemSpec,
-        fuzz_cases: Optional[List[str]] = None,
-    ) -> Tuple[bool, ExecutionTelemetry]:
+        fuzz_cases: list[str] | None = None,
+    ) -> tuple[bool, ExecutionTelemetry]:
         """
         Run code against boundary and worst-case stress tests.
         Returns whether it survived without TLE/MLE/RE, along with peak telemetry.
@@ -142,12 +141,9 @@ class DifferentialOracle:
             )
 
             # Accumulate peak resource metrics
-            if res.cpu_time_ms > worst_telemetry.cpu_time_ms:
-                worst_telemetry.cpu_time_ms = res.cpu_time_ms
-            if res.wall_clock_ms > worst_telemetry.wall_clock_ms:
-                worst_telemetry.wall_clock_ms = res.wall_clock_ms
-            if res.peak_rss_kb > worst_telemetry.peak_rss_kb:
-                worst_telemetry.peak_rss_kb = res.peak_rss_kb
+            worst_telemetry.cpu_time_ms = max(worst_telemetry.cpu_time_ms, res.cpu_time_ms)
+            worst_telemetry.wall_clock_ms = max(worst_telemetry.wall_clock_ms, res.wall_clock_ms)
+            worst_telemetry.peak_rss_kb = max(worst_telemetry.peak_rss_kb, res.peak_rss_kb)
 
             if res.verdict != "AC":
                 worst_telemetry.verdict = res.verdict
@@ -159,10 +155,10 @@ class DifferentialOracle:
 
     def cross_validate_candidates(
         self,
-        candidates: List[Tuple[str, str]],  # (code, language)
+        candidates: list[tuple[str, str]],  # (code, language)
         spec: ProblemSpec,
-        inputs: List[str],
-    ) -> List[Tuple[str, int, ExecutionTelemetry]]:
+        inputs: list[str],
+    ) -> list[tuple[str, int, ExecutionTelemetry]]:
         """
         Run multiple candidates across test inputs and calculate consensus voting.
         Returns list of (code, consensus_score, worst_telemetry).
@@ -193,10 +189,8 @@ class DifferentialOracle:
                     worst_telem.verdict = telem.verdict
                     break
                 outputs.append(normalize_output(telem.stdout))
-                if telem.cpu_time_ms > worst_telem.cpu_time_ms:
-                    worst_telem.cpu_time_ms = telem.cpu_time_ms
-                if telem.peak_rss_kb > worst_telem.peak_rss_kb:
-                    worst_telem.peak_rss_kb = telem.peak_rss_kb
+                worst_telem.cpu_time_ms = max(worst_telem.cpu_time_ms, telem.cpu_time_ms)
+                worst_telem.peak_rss_kb = max(worst_telem.peak_rss_kb, telem.peak_rss_kb)
 
             if all_passed:
                 results.append((code, outputs, worst_telem))

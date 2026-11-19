@@ -9,7 +9,7 @@ root ::= "{\n"
   "  \"steps\": " string-list "\n"
 "}"
 
-paradigm ::= "\"greedy\"" | "\"dynamic_programming\"" | "\"two_pointers\"" | "\"binary_search\"" | "\"graph_bfs_dfs\"" | "\"shortest_path\"" | "\"disjoint_set_union\"" | "\"segment_tree_fenwick\"" | "\"math_number_theory\"" | "\"constructive\"" | "\"bitmask\"" | "\"divide_and_conquer\"" | "\"flow_matching\"" | "\"brute_force_backtrack\""
+paradigm ::= "\"greedy\"" | "\"dynamic_programming\"" | "\"two_pointers\"" | "\"binary_search\"" | "\"graph_bfs_dfs\"" | "\"shortest_path\"" | "\"disjoint_set_union\"" | "\"segment_tree_fenwick\"" | "\"math_number_theory\"" | "\"constructive\"" | "\"bitmask\"" | "\"divide_and_conquer\"" | "\"flow_matching\"" | "\"brute_force_backtrack\"" | "\"game_theory\""
 
 complexity ::= "\"O(" [a-zA-Z0-9 +*^/._()]+ ")\""
 

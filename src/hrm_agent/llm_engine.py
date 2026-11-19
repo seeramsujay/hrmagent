@@ -9,14 +9,15 @@ Enforces:
 - Option A (three resident models) & Option B (hybrid resident 0.5B + shared 1.5B multi-LoRA)
 """
 
+import hashlib
+import json
 import os
 import time
-import json
-import urllib.request
 import urllib.error
+import urllib.request
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Any
+from typing import Any
 
 from hrm_agent.schemas import LLMTelemetry
 
@@ -28,15 +29,14 @@ class LLMEngine(ABC):
     def generate(
         self,
         prompt: str,
-        grammar_text: Optional[str] = None,
-        grammar_path: Optional[str] = None,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
         top_p: float = 0.95,
-        stop: Optional[List[str]] = None,
-    ) -> Tuple[str, LLMTelemetry]:
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
         """Generate text constrained by grammar and report performance telemetry."""
-        pass
 
 
 class LlamaCppEngine(LLMEngine):
@@ -48,10 +48,10 @@ class LlamaCppEngine(LLMEngine):
         n_ctx: int = 2048,
         type_k: str = "q8_0",
         type_v: str = "q8_0",
-        n_threads: Optional[int] = None,
-        lora_path: Optional[str] = None,
-        lora_base: Optional[str] = None,
-        p_core_mask: Optional[str] = None,
+        n_threads: int | None = None,
+        lora_path: str | None = None,
+        lora_base: str | None = None,
+        p_core_mask: str | None = None,
     ):
         try:
             import llama_cpp
@@ -96,7 +96,7 @@ class LlamaCppEngine(LLMEngine):
         tv = kv_cache_type_map.get(type_v.lower(), 8)
 
         # Initialize Llama model
-        llama_kwargs: Dict[str, Any] = {
+        llama_kwargs: dict[str, Any] = {
             "model_path": model_path,
             "n_ctx": n_ctx,
             "n_threads": self.n_threads,
@@ -115,9 +115,9 @@ class LlamaCppEngine(LLMEngine):
                 llama_kwargs["lora_base"] = lora_base
 
         self.llm = llama_cpp.Llama(**llama_kwargs)
-        self._grammar_cache: Dict[str, Any] = {}
+        self._grammar_cache: dict[str, Any] = {}
 
-    def load_grammar(self, grammar_text: Optional[str] = None, grammar_path: Optional[str] = None) -> Any:
+    def load_grammar(self, grammar_text: str | None = None, grammar_path: str | None = None) -> Any:
         """Load and cache GBNF grammar."""
         if grammar_path and os.path.exists(grammar_path):
             if grammar_path in self._grammar_cache:
@@ -127,7 +127,7 @@ class LlamaCppEngine(LLMEngine):
             self._grammar_cache[grammar_path] = compiled
             return compiled
         elif grammar_text:
-            cache_key = hash(grammar_text)
+            cache_key = f"sha256:{hashlib.sha256(grammar_text.encode('utf-8')).hexdigest()}"
             if cache_key in self._grammar_cache:
                 return self._grammar_cache[cache_key]
             compiled = self.llama_cpp.LlamaGrammar.from_string(grammar_text)
@@ -135,7 +135,7 @@ class LlamaCppEngine(LLMEngine):
             return compiled
         return None
 
-    def swap_lora(self, lora_path: Optional[str]) -> None:
+    def swap_lora(self, lora_path: str | None) -> None:
         """Dynamically load or unload LoRA adapter for Option B multi-LoRA topology."""
         if hasattr(self.llm, "apply_lora_from_file"):
             if lora_path and os.path.exists(lora_path):
@@ -145,13 +145,13 @@ class LlamaCppEngine(LLMEngine):
     def generate(
         self,
         prompt: str,
-        grammar_text: Optional[str] = None,
-        grammar_path: Optional[str] = None,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
         top_p: float = 0.95,
-        stop: Optional[List[str]] = None,
-    ) -> Tuple[str, LLMTelemetry]:
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
         """Execute constrained generation with prompt prefix reuse and telemetry."""
         grammar = self.load_grammar(grammar_text=grammar_text, grammar_path=grammar_path)
 
@@ -198,13 +198,13 @@ class LlamaServerEngine(LLMEngine):
     def generate(
         self,
         prompt: str,
-        grammar_text: Optional[str] = None,
-        grammar_path: Optional[str] = None,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
         top_p: float = 0.95,
-        stop: Optional[List[str]] = None,
-    ) -> Tuple[str, LLMTelemetry]:
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
         if grammar_path and os.path.exists(grammar_path):
             grammar_text = Path(grammar_path).read_text(encoding="utf-8")
 
@@ -251,7 +251,7 @@ class LlamaServerEngine(LLMEngine):
 class MockLLMEngine(LLMEngine):
     """Deterministic mock LLM engine used for tests and offline validation."""
 
-    def __init__(self, responses: Optional[List[str]] = None):
+    def __init__(self, responses: list[str] | None = None):
         self.responses = responses or []
         self.call_idx = 0
 
@@ -261,13 +261,13 @@ class MockLLMEngine(LLMEngine):
     def generate(
         self,
         prompt: str,
-        grammar_text: Optional[str] = None,
-        grammar_path: Optional[str] = None,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.2,
         top_p: float = 0.95,
-        stop: Optional[List[str]] = None,
-    ) -> Tuple[str, LLMTelemetry]:
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
         if self.call_idx < len(self.responses):
             text = self.responses[self.call_idx]
             self.call_idx += 1
@@ -275,7 +275,7 @@ class MockLLMEngine(LLMEngine):
             # Generate generic fallback based on prompt or grammar
             if (grammar_path and "planner" in grammar_path) or "system 2 algorithmic planner" in prompt.lower():
                 text = (
-                    '{\n'
+                    "{\n"
                     '  "analysis": "Optimal greedy single-pass scan maintaining running total",\n'
                     '  "paradigm": "greedy",\n'
                     '  "data_structures": ["vector"],\n'
@@ -287,60 +287,78 @@ class MockLLMEngine(LLMEngine):
                     '    "Read test case count T and iterate",\n'
                     '    "Accumulate sum using long long to avoid 32-bit overflow",\n'
                     '    "Output result with newline"\n'
-                    '  ]\n'
-                    '}'
+                    "  ]\n"
+                    "}"
                 )
             elif (grammar_path and "critic" in grammar_path) or "jev, a rigorous" in prompt.lower():
                 text = (
-                    '{\n'
+                    "{\n"
                     '  "analysis": "Solution passes sample cases and runs well within 1.0s limit",\n'
                     '  "status": "PASS",\n'
                     '  "bottleneck_class": "none",\n'
                     '  "escalate_to_planner": false,\n'
                     '  "target_lines": "none",\n'
                     '  "patch_directive": "None required"\n'
-                    '}'
+                    "}"
                 )
             elif (grammar_path and "diff" in grammar_path) or "unified diff" in prompt.lower():
                 text = (
-                    '--- a/solution.cpp\n'
-                    '+++ b/solution.cpp\n'
-                    '@@ -5,3 +5,3 @@\n'
-                    '     int a, b;\n'
-                    '-    cin >> a;\n'
-                    '+    cin >> a >> b;\n'
-                    '     return 0;\n'
+                    "--- a/solution.cpp\n"
+                    "+++ b/solution.cpp\n"
+                    "@@ -5,3 +5,3 @@\n"
+                    "     int a, b;\n"
+                    "-    cin >> a;\n"
+                    "+    cin >> a >> b;\n"
+                    "     return 0;\n"
+                )
+            elif (
+                (grammar_path and "py_raw" in grammar_path)
+                or "into optimal python 3" in prompt.lower()
+                or "# language: python" in prompt.lower()
+            ):
+                text = (
+                    "import sys\n"
+                    "def solve():\n"
+                    "    lines = sys.stdin.read().splitlines()\n"
+                    "    if not lines:\n"
+                    "        return\n"
+                    "    t = int(lines[0])\n"
+                    "    for i in range(1, t + 1):\n"
+                    "        nums = sorted(map(int, lines[i].split()))\n"
+                    "        print(nums[-2] if len(nums) >= 2 else nums[0])\n"
+                    "if __name__ == '__main__':\n"
+                    "    solve()\n"
                 )
             else:
                 # Default C++20 raw program
                 text = (
-                    '#include <iostream>\n'
-                    '#include <vector>\n'
-                    '#include <numeric>\n'
-                    'using namespace std;\n'
-                    'using ll = long long;\n'
-                    '\n'
-                    'void solve() {\n'
-                    '    int n;\n'
-                    '    if (!(cin >> n)) return;\n'
-                    '    ll total = 0;\n'
-                    '    for (int i = 0; i < n; ++i) {\n'
-                    '        ll x;\n'
-                    '        cin >> x;\n'
-                    '        total += x;\n'
-                    '    }\n'
+                    "#include <iostream>\n"
+                    "#include <vector>\n"
+                    "#include <numeric>\n"
+                    "using namespace std;\n"
+                    "using ll = long long;\n"
+                    "\n"
+                    "void solve() {\n"
+                    "    int n;\n"
+                    "    if (!(cin >> n)) return;\n"
+                    "    ll total = 0;\n"
+                    "    for (int i = 0; i < n; ++i) {\n"
+                    "        ll x;\n"
+                    "        cin >> x;\n"
+                    "        total += x;\n"
+                    "    }\n"
                     '    cout << total << "\\n";\n'
-                    '}\n'
-                    '\n'
-                    'int main() {\n'
-                    '    ios::sync_with_stdio(false);\n'
-                    '    cin.tie(nullptr);\n'
-                    '    int t = 1;\n'
-                    '    if (cin >> t) {\n'
-                    '        while (t--) solve();\n'
-                    '    }\n'
-                    '    return 0;\n'
-                    '}\n'
+                    "}\n"
+                    "\n"
+                    "int main() {\n"
+                    "    ios::sync_with_stdio(false);\n"
+                    "    cin.tie(nullptr);\n"
+                    "    int t = 1;\n"
+                    "    if (cin >> t) {\n"
+                    "        while (t--) solve();\n"
+                    "    }\n"
+                    "    return 0;\n"
+                    "}\n"
                 )
 
         telemetry = LLMTelemetry(
@@ -352,3 +370,149 @@ class MockLLMEngine(LLMEngine):
             total_latency_ms=12.5,
         )
         return text, telemetry
+
+
+class TransformersEngine(LLMEngine):
+    """PyTorch Hugging Face Transformers local inference engine.
+
+    Supports CUDA and CPU execution, bfloat16/float16 precision,
+    LoRA adapters via PEFT, and standalone merged weights.
+    """
+
+    def __init__(
+        self,
+        model_name_or_path: str,
+        adapter_path: str | None = None,
+        device: str = "auto",
+        torch_dtype: Any = None,
+        max_context: int = 2048,
+    ):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self.device = (
+            "cuda" if device == "auto" and torch.cuda.is_available() else ("cpu" if device == "auto" else device)
+        )
+        self.dtype = torch_dtype or (torch.bfloat16 if self.device == "cuda" else torch.float32)
+        self.max_context = max_context
+
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name_or_path,
+            torch_dtype=self.dtype,
+            device_map=self.device,
+            trust_remote_code=True,
+        )
+
+        if adapter_path and os.path.exists(adapter_path):
+            from peft import PeftModel
+
+            self.model = PeftModel.from_pretrained(self.model, adapter_path)
+
+        self.model.eval()
+
+    def generate(
+        self,
+        prompt: str,
+        grammar_text: str | None = None,
+        grammar_path: str | None = None,
+        max_tokens: int = 512,
+        temperature: float = 0.2,
+        top_p: float = 0.95,
+        stop: list[str] | None = None,
+    ) -> tuple[str, LLMTelemetry]:
+        import torch
+
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        prompt_tokens = inputs["input_ids"].shape[1]
+
+        do_sample = temperature > 0.05
+        gen_kwargs: dict[str, Any] = {
+            "max_new_tokens": max_tokens,
+            "do_sample": do_sample,
+            "pad_token_id": self.tokenizer.eos_token_id,
+        }
+        if do_sample:
+            gen_kwargs["temperature"] = max(0.1, temperature)
+            gen_kwargs["top_p"] = top_p
+
+        start_time = time.perf_counter()
+        with torch.no_grad():
+            outputs = self.model.generate(**inputs, **gen_kwargs)
+        end_time = time.perf_counter()
+
+        gen_tokens = outputs[0][prompt_tokens:]
+        completion_tokens = len(gen_tokens)
+        decoded = self.tokenizer.decode(gen_tokens, skip_special_tokens=True)
+
+        # Truncate at stop sequences if requested
+        if stop:
+            for s in stop:
+                idx = decoded.find(s)
+                if idx != -1:
+                    decoded = decoded[:idx]
+
+        total_latency_ms = (end_time - start_time) * 1000.0
+        prefill_ms = max(0.0, total_latency_ms * 0.15)
+        decode_ms = max(1.0, total_latency_ms * 0.85)
+        tok_s = (completion_tokens / (decode_ms / 1000.0)) if decode_ms > 0 else 0.0
+
+        telemetry = LLMTelemetry(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            prefill_ms=round(prefill_ms, 2),
+            decode_ms=round(decode_ms, 2),
+            tokens_per_second=round(tok_s, 2),
+            total_latency_ms=round(total_latency_ms, 2),
+        )
+        return decoded, telemetry
+
+
+class DualPairEngine:
+    """Manages the Dual-Pair HRM agents:
+    - Role 1: Architect & Critic (System 2 Blueprint Planning + Jev Critic Diagnosis)
+    - Role 2: Fast Coder & Patcher (System 1 Code Synthesis + Unified Diff Patching)
+    """
+
+    def __init__(
+        self,
+        role1_path: str = "outputs/merged/role1_architect_critic",
+        role2_path: str = "outputs/merged/role2_coder_patcher",
+        base_model: str = "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+        role1_adapter: str | None = "outputs/checkpoints_architect_critic/final_adapter",
+        role2_adapter: str | None = "outputs/checkpoints_dpo/final_dpo_adapter",
+        device: str = "auto",
+        mock_fallback: bool = False,
+    ):
+        self.device = device
+        self.mock_fallback = mock_fallback
+
+        if os.path.exists(role1_path):
+            self.role1_engine: LLMEngine = TransformersEngine(role1_path, device=device)
+        elif role1_adapter and os.path.exists(role1_adapter):
+            self.role1_engine = TransformersEngine(base_model, adapter_path=role1_adapter, device=device)
+        elif mock_fallback:
+            self.role1_engine = MockLLMEngine()
+        else:
+            raise FileNotFoundError(f"Role 1 model not found at {role1_path} or adapter at {role1_adapter}")
+
+        if os.path.exists(role2_path):
+            self.role2_engine: LLMEngine = TransformersEngine(role2_path, device=device)
+        elif role2_adapter and os.path.exists(role2_adapter):
+            self.role2_engine = TransformersEngine(base_model, adapter_path=role2_adapter, device=device)
+        elif mock_fallback:
+            self.role2_engine = MockLLMEngine()
+        else:
+            raise FileNotFoundError(f"Role 2 model not found at {role2_path} or adapter at {role2_adapter}")
+
+    def get_planner_engine(self) -> LLMEngine:
+        """Role 1 System 2 Algorithmic Planner."""
+        return self.role1_engine
+
+    def get_coder_engine(self) -> LLMEngine:
+        """Role 2 System 1 Fast Coder & Patcher."""
+        return self.role2_engine
+
+    def get_critic_engine(self) -> LLMEngine:
+        """Role 1 Jev Complexity & Hallucination Critic."""
+        return self.role1_engine

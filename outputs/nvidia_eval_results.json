@@ -1,0 +1,217 @@
+{
+  "timestamp": "2026-11-19 02:20:59",
+  "gpu": {
+    "device": "cuda:0",
+    "name": "NVIDIA GeForce RTX 4050 Laptop GPU",
+    "total_memory_mb": 5770.8,
+    "major": 8,
+    "minor": 9,
+    "multi_processor_count": 20,
+    "cuda_version": "13.2"
+  },
+  "terminal_bench": {
+    "total_tasks": 5,
+    "passed_tasks": 5,
+    "pass_rate_pct": 100.0,
+    "total_wall_clock_ms": 297.06,
+    "results": [
+      {
+        "task_id": "TB-01-LOG-METRICS",
+        "category": "log_diagnostics",
+        "passed": true,
+        "exit_code": 0,
+        "wall_clock_ms": 14.65,
+        "error": null
+      },
+      {
+        "task_id": "TB-02-BINARY-SEARCH-PATCH",
+        "category": "code_patching",
+        "passed": true,
+        "exit_code": 0,
+        "wall_clock_ms": 10.55,
+        "error": null
+      },
+      {
+        "task_id": "TB-03-CPP-INT64-OVERFLOW",
+        "category": "build_compilation",
+        "passed": true,
+        "exit_code": 0,
+        "wall_clock_ms": 237.82,
+        "error": null
+      },
+      {
+        "task_id": "TB-04-RECURSIVE-YAML-REFACTOR",
+        "category": "bash_scripting",
+        "passed": true,
+        "exit_code": 0,
+        "wall_clock_ms": 3.73,
+        "error": null
+      },
+      {
+        "task_id": "TB-05-UNITTEST-DIAGNOSTIC-REPAIR",
+        "category": "test_repair",
+        "passed": true,
+        "exit_code": 0,
+        "wall_clock_ms": 30.31,
+        "error": null
+      }
+    ]
+  },
+  "competitive_programming": {
+    "total_problems": 10,
+    "ac_count": 1,
+    "pass_rate_pct": 10.0,
+    "results": [
+      {
+        "problem_id": "CF-15C",
+        "title": "Industrial Nim",
+        "paradigm": "game_theory",
+        "rating": 1800,
+        "model_verdict": "WA",
+        "model_solved": false,
+        "model_wall_ms": 5.0,
+        "model_code": "def solve():\n    import sys\n    input = sys.stdin.read\n    data = input().split()\n    \n    if not data:\n        return\n    \n    n = int(data[0])\n    if n == 1:\n        print(\"tolik\")\n        return\n    \n    x = list(map(int, data[1].split()))\n    m = list(map(int, data[2].split()))\n    \n    # Sort piles by their sizes\n    x.sort()\n    m.sort()\n    \n    # Calculate the total number of stones\n    total_stones = sum(x)\n    \n    # Determine the winner based on the parity of the total number of stones\n    if total_stones % 2 == 0:\n        print(\"tolik\")\n    else:\n        print(\"bolik\")\n\nif __name__ == \"__main__\":\n    solve()",
+        "reference_code": "import sys\ndef f(n):\n    rem = n % 4\n    if rem == 0: return n\n    elif rem == 1: return 1\n    elif rem == 2: return n + 1\n    return 0\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    n = int(lines[0])\n    xor_total = 0\n    for i in range(1, n + 1):\n        parts = lines[i].split()\n        if not parts: continue\n        x, m = int(parts[0]), int(parts[1])\n        # XOR sum from x to x + m - 1\n        xor_total ^= (f(x + m - 1) ^ f(x - 1))\n    print('tolik' if xor_total != 0 else 'bolik')\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "WA",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 9756,
+        "iterations": 6
+      },
+      {
+        "problem_id": "CF-1194D",
+        "title": "1-2-K Game",
+        "paradigm": "game_theory",
+        "rating": 1500,
+        "model_verdict": "RE",
+        "model_solved": false,
+        "model_wall_ms": 0.0,
+        "model_code": "def solve():\n    import sys\n    input = sys.stdin.read\n    data = input().split()\n    \n    if not data:\n        return\n    \n    t = int(data[0])\n    for _ in range(t):\n        n, k = map(int, data[1].split())\n        if n % 2 == 0:\n            print(\"Bob\")\n        else:\n            # Calculate the number of stones that can be removed\n            stones_to_remove = n - (n % k)\n            if stones_to_remove >= k:\n                print(\"Alice\")\n            else:\n                print(\"Bob\")\n\nif __name__ == \"__main__\":\n    solve()",
+        "reference_code": "import sys\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    t = int(lines[0])\n    for i in range(1, t + 1):\n        parts = lines[i].split()\n        if not parts: continue\n        n, k = int(parts[0]), int(parts[1])\n        if k % 3 != 0:\n            print('Alice' if n % 3 != 0 else 'Bob')\n        else:\n            rem = n % (k + 1)\n            if rem % 3 == 0 and rem != k:\n                print('Bob')\n            else:\n                print('Alice')\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 9536,
+        "iterations": 6
+      },
+      {
+        "problem_id": "CF-1537D",
+        "title": "Deleting Divisors",
+        "paradigm": "game_theory",
+        "rating": 1600,
+        "model_verdict": "WA",
+        "model_solved": false,
+        "model_wall_ms": 0.0,
+        "model_code": "def solve():\n    import sys\n    input = sys.stdin.read\n    data = input().split()\n    \n    if not data:\n        return\n    \n    t = int(data[0])\n    for _ in range(t):\n        n = int(data[1])\n        if n % 2 == 0:\n            print(\"Bob\")\n        else:\n            # Start checking from the smallest possible divisor\n            for i in range(2, int(n**0.5) + 1):\n                if n % i == 0:\n                    if i != n // i:\n                        print(\"Alice\")\n                    else:\n                        print(\"Bob\")\n                    break\n\nif __name__ == \"__main__\":\n    solve()",
+        "reference_code": "import sys\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    t = int(lines[0])\n    for i in range(1, t + 1):\n        n = int(lines[i].strip())\n        if n % 2 != 0:\n            print('Bob')\n        else:\n            cnt = 0\n            temp = n\n            while temp % 2 == 0:\n                temp //= 2\n                cnt += 1\n            if temp == 1:\n                print('Alice' if cnt % 2 == 0 else 'Bob')\n            else:\n                print('Alice')\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 9716,
+        "iterations": 6
+      },
+      {
+        "problem_id": "CHEF-NUMGAME",
+        "title": "Chef Number Game",
+        "paradigm": "game_theory",
+        "rating": 1100,
+        "model_verdict": "AC",
+        "model_solved": true,
+        "model_wall_ms": 0.0,
+        "model_code": "def solve():\n    t = int(input())\n    for _ in range(t):\n        n = int(input())\n        if n % 2 == 0:\n            print('ALICE')\n        else:\n            print('BOB')\n\nif __name__ == '__main__':\n    solve()",
+        "reference_code": "import sys\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    t = int(lines[0])\n    for i in range(1, t + 1):\n        n = int(lines[i].strip())\n        print('ALICE' if n % 2 == 0 else 'BOB')\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 9580,
+        "iterations": 2
+      },
+      {
+        "problem_id": "CHEF-NIM",
+        "title": "Chef and Classic Nim",
+        "paradigm": "game_theory",
+        "rating": 1300,
+        "model_verdict": "RE",
+        "model_solved": false,
+        "model_wall_ms": 0.0,
+        "model_code": "def nim_game(n):\n    # If n is odd, the first player can always win\n    if n % 2 != 0:\n        return True\n    else:\n        # If n is even, the second player can always win\n        return False\n\n# Read input\nT = int(input())\nresults = []\n\nfor _ in range(T):\n    N = int(input())\n    results.append(nim_game(N))\n\nprint('\\n'.join(map(str, results)))",
+        "reference_code": "import sys\nfrom functools import reduce\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    t = int(lines[0])\n    idx = 1\n    for _ in range(t):\n        n = int(lines[idx])\n        piles = list(map(int, lines[idx + 1].split()))\n        idx += 2\n        xor_val = reduce(lambda a, b: a ^ b, piles, 0)\n        print('First' if xor_val != 0 else 'Second')\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 10276,
+        "iterations": 6
+      },
+      {
+        "problem_id": "CF-455A",
+        "title": "Boredom",
+        "paradigm": "dynamic_programming",
+        "rating": 1500,
+        "model_verdict": "WA",
+        "model_solved": false,
+        "model_wall_ms": 0.0,
+        "model_code": "def max_points(n, a):\n    # Sort the array to handle duplicates and find the maximum points\n    a.sort()\n    max_points = 0\n    \n    # Iterate through the sorted array\n    for i in range(1, n):\n        # If the current element is not equal to the previous one minus one\n        if a[i] != a[i - 1] - 1:\n            # Add the points earned from this element\n            max_points += a[i]\n    \n    return max_points\n\n# Read input values\nn = int(input())\na = list(map(int, input().split()))\nresult = max_points(n, a)\nprint(result)",
+        "reference_code": "import sys\nfrom collections import Counter\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    n = int(lines[0])\n    nums = list(map(int, lines[1].split()))\n    counts = Counter(nums)\n    max_val = max(nums)\n    dp = [0] * (max_val + 1)\n    dp[1] = counts[1] * 1\n    for i in range(2, max_val + 1):\n        dp[i] = max(dp[i - 1], dp[i - 2] + counts[i] * i)\n    print(dp[max_val])\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 10060,
+        "iterations": 6
+      },
+      {
+        "problem_id": "CF-845C",
+        "title": "Two TVs",
+        "paradigm": "greedy",
+        "rating": 1400,
+        "model_verdict": "RE",
+        "model_solved": false,
+        "model_wall_ms": 0.0,
+        "model_code": "import sys\ndef solve():\n    input = sys.stdin.read().splitlines()\n    if not input:\n        return\n    data = list(map(int, input[0].split()))\n    n = data[0]\n    l = data[1]\n    r = data[2]\n    \n    # Initialize the result\n    result = \"YES\" if r >= l else \"NO\"\n    \n    # Iterate through each TV show\n    for i in range(1, n + 1):\n        # Check if the current TV show can be watched without missing any part\n        if r >= l + i - 1:\n            result = \"YES\"\n            break\n    \n    print(result)\n\nif __name__ == \"__main__\":\n    solve()",
+        "reference_code": "import sys\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    n = int(lines[0])\n    intervals = []\n    for i in range(1, n + 1):\n        p = lines[i].split()\n        if p: intervals.append((int(p[0]), int(p[1])))\n    intervals.sort()\n    tv1, tv2 = -1, -1\n    for l, r in intervals:\n        if l > tv1:\n            tv1 = r\n        elif l > tv2:\n            tv2 = r\n        else:\n            print('NO')\n            return\n    print('YES')\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 9740,
+        "iterations": 6
+      },
+      {
+        "problem_id": "CC-FLOW017",
+        "title": "Second Largest",
+        "paradigm": "greedy",
+        "rating": 900,
+        "model_verdict": "RE",
+        "model_solved": false,
+        "model_wall_ms": 0.0,
+        "model_code": "import sys\n\ndef find_second_largest(A, B, C):\n    # Sort the numbers\n    sorted_numbers = sorted([A, B, C])\n    \n    # The second largest number is at index (n-2)\n    return sorted_numbers[1]\n\n# Read input values\nT = int(sys.stdin.read())\nresults = []\n\nfor _ in range(T):\n    A, B, C = map(int, sys.stdin.readline().split())\n    result = find_second_largest(A, B, C)\n    results.append(result)\n\n# Output the results\nfor result in results:\n    print(result)  # Ensure the output is a single line",
+        "reference_code": "import sys\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    t = int(lines[0])\n    for i in range(1, t + 1):\n        parts = sorted(map(int, lines[i].split()))\n        print(parts[1])\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 9616,
+        "iterations": 6
+      },
+      {
+        "problem_id": "CF-706B",
+        "title": "Interesting Drink",
+        "paradigm": "binary_search",
+        "rating": 1100,
+        "model_verdict": "RE",
+        "model_solved": false,
+        "model_wall_ms": 0.0,
+        "model_code": "def solve():\n    import sys\n    input = sys.stdin.read\n    data = input().split()\n    \n    if not data:\n        return\n    \n    n = int(data[0])\n    q = int(data[1])\n    prices = list(map(int, data[2].split()))\n    m = list(map(int, data[3].split()))\n    \n    # Initialize the result array\n    result = [0] * (n + 1)\n    \n    # Calculate the total amount of money Vasiliy has\n    total_money = sum(m)\n    \n    # Iterate through each shop and calculate the number of drinks he can buy\n    for i in range(1, n + 1):\n        # Calculate the maximum number of drinks he can buy with the current amount of money\n        max_drinks = min(total_money // prices[i - 1], m[i - 1])\n        \n        # Update the result array\n        result[i] = max_drinks\n    \n    # Output the results\n    for i in range(1, n + 1):\n        print(result[i])\n\nif __name__ == \"__main__\":\n    solve()",
+        "reference_code": "import sys\nimport bisect\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    n = int(lines[0])\n    prices = sorted(map(int, lines[1].split()))\n    q = int(lines[2])\n    out = []\n    for i in range(3, 3 + q):\n        m = int(lines[i])\n        out.append(str(bisect.bisect_right(prices, m)))\n    print('\\n'.join(out))\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 9676,
+        "iterations": 6
+      },
+      {
+        "problem_id": "CF-230B",
+        "title": "T-primes",
+        "paradigm": "math_number_theory",
+        "rating": 1300,
+        "model_verdict": "RE",
+        "model_solved": false,
+        "model_wall_ms": 0.0,
+        "model_code": "import sys\n\ndef is_t_prime(n):\n    \"\"\"Check if a number is T-prime.\"\"\"\n    if n < 4:\n        return False\n    if n % 2 == 0 or n % 3 == 0:\n        return False\n    i = 5\n    while i * i <= n:\n        if n % i == 0 or n % (i + 2) == 0:\n            return False\n        i += 6\n    return True\n\ndef main():\n    input = sys.stdin.read().splitlines()\n    if not input:\n        return\n    \n    t = int(input[0])\n    for _ in range(t):\n        n = int(input[1])\n        result = \"YES\" if is_t_prime(n) else \"NO\"\n        print(result)\n\nif __name__ == \"__main__\":\n    main()",
+        "reference_code": "import sys\nimport math\ndef sieve(max_val=1000000):\n    primes = bytearray([1]) * (max_val + 1)\n    primes[0] = primes[1] = 0\n    for i in range(2, int(max_val**0.5) + 1):\n        if primes[i]:\n            primes[i*i:max_val+1:i] = bytearray([0]) * len(range(i*i, max_val+1, i))\n    return primes\ndef solve():\n    lines = sys.stdin.read().splitlines()\n    if not lines: return\n    n = int(lines[0])\n    nums = list(map(int, lines[1].split()))\n    is_prime = sieve(1000000)\n    for x in nums:\n        r = int(math.isqrt(x))\n        if r * r == x and is_prime[r]:\n            print('YES')\n        else:\n            print('NO')\nif __name__ == '__main__':\n    solve()\n",
+        "reference_verdict": "AC",
+        "reference_avg_time_ms": 0.0,
+        "reference_max_rss_kb": 11240,
+        "iterations": 6
+      }
+    ]
+  }
+}

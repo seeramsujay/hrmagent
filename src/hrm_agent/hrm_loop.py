@@ -5,25 +5,24 @@ Macro-Step (Node 1 Planner) -> Inner Micro-Loop (Node 2 Coder + Sandbox) -> Jev 
 Supports asymmetric test-time scaling, unified-diff patching, and structured JSONL tracing.
 """
 
-import os
 import json
-import time
+import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Tuple
 
-from hrm_agent.schemas import (
-    ProblemSpec,
-    PlannerBlueprint,
-    JevVerdict,
-    ExecutionTelemetry,
-    AgentTrace,
-    LLMTelemetry,
-)
 from hrm_agent.llm_engine import LLMEngine
 from hrm_agent.patcher import apply_patch
+from hrm_agent.schemas import (
+    AgentTrace,
+    ExecutionTelemetry,
+    JevVerdict,
+    LLMTelemetry,
+    PlannerBlueprint,
+    ProblemSpec,
+)
+from judge.fuzz_oracle import DifferentialOracle
 from judge.sandbox import SandboxRunner
-from judge.fuzz_oracle import FuzzCaseGenerator, DifferentialOracle
 
 
 class HRMAgentLoop:
@@ -34,7 +33,7 @@ class HRMAgentLoop:
         node1_planner: LLMEngine,
         node2_coder: LLMEngine,
         node3_critic: LLMEngine,
-        sandbox: Optional[SandboxRunner] = None,
+        sandbox: SandboxRunner | None = None,
         language: str = "cpp",
         n_plans: int = 1,
         n_candidates: int = 3,
@@ -42,7 +41,7 @@ class HRMAgentLoop:
         max_critic_iters: int = 2,
         max_planner_escalations: int = 1,
         grammar_dir: str = "grammars",
-        trace_file: Optional[str] = None,
+        trace_file: str | None = None,
     ):
         self.planner = node1_planner
         self.coder = node2_coder
@@ -67,8 +66,8 @@ class HRMAgentLoop:
             f.write(trace.model_dump_json() + "\n")
 
     def _run_planner(
-        self, spec: ProblemSpec, critique_context: Optional[str] = None
-    ) -> Tuple[Optional[PlannerBlueprint], LLMTelemetry]:
+        self, spec: ProblemSpec, critique_context: str | None = None
+    ) -> tuple[PlannerBlueprint | None, LLMTelemetry]:
         """Node 1: Generate dense <250-token JSON blueprint."""
         prompt = (
             "<|im_start|>system\n"
@@ -114,7 +113,7 @@ class HRMAgentLoop:
 
     def _run_coder_plan_to_code(
         self, spec: ProblemSpec, blueprint: PlannerBlueprint, temp: float = 0.6
-    ) -> Tuple[str, LLMTelemetry]:
+    ) -> tuple[str, LLMTelemetry]:
         """Node 2: Plan-to-Code mode generating pure C++20 or Python without markdown fences."""
         lang_str = "C++20" if self.language == "cpp" else "Python 3"
         prompt = (
@@ -139,9 +138,7 @@ class HRMAgentLoop:
         )
 
         grammar_file = (
-            str(self.grammar_dir / "cpp_raw.gbnf")
-            if self.language == "cpp"
-            else str(self.grammar_dir / "py_raw.gbnf")
+            str(self.grammar_dir / "cpp_raw.gbnf") if self.language == "cpp" else str(self.grammar_dir / "py_raw.gbnf")
         )
 
         raw_code, telem = self.coder.generate(
@@ -150,17 +147,19 @@ class HRMAgentLoop:
             max_tokens=1024,
             temperature=temp,
         )
-        # Strip extraneous markdown backticks if leaked
+        # Strip extraneous markdown backticks or fences only if they occur at line boundaries
         clean_code = raw_code.strip()
-        if clean_code.startswith("```"):
-            clean_code = clean_code.split("\n", 1)[1]
-        if clean_code.endswith("```"):
-            clean_code = clean_code.rsplit("\n", 1)[0]
+        fence_match = re.search(r"```(?:[a-zA-Z0-9_+-]+)?\n([\s\S]*?)\n```", clean_code)
+        if fence_match:
+            clean_code = fence_match.group(1).strip()
+        else:
+            clean_code = re.sub(r"^```(?:[a-zA-Z0-9_+-]+)?\n", "", clean_code)
+            clean_code = re.sub(r"\n```\s*$", "", clean_code)
         return clean_code.strip(), telem
 
     def _run_coder_error_to_diff(
         self, spec: ProblemSpec, current_code: str, error_feedback: str
-    ) -> Tuple[Optional[str], LLMTelemetry]:
+    ) -> tuple[str | None, LLMTelemetry]:
         """Node 2: Error-to-Unified-Diff mode emitting strictly valid unified diffs."""
         prompt = (
             "<|im_start|>system\n"
@@ -182,11 +181,18 @@ class HRMAgentLoop:
             max_tokens=512,
             temperature=0.3,
         )
-        return diff_text.strip(), telem
+        clean_diff = diff_text.strip()
+        fence_match = re.search(r"```(?:diff|patch|udiff)?\n([\s\S]*?)\n```", clean_diff)
+        if fence_match:
+            clean_diff = fence_match.group(1).strip()
+        else:
+            clean_diff = re.sub(r"^```(?:diff|patch|udiff)?\n", "", clean_diff)
+            clean_diff = re.sub(r"\n```\s*$", "", clean_diff)
+        return clean_diff.strip(), telem
 
     def _run_critic(
         self, spec: ProblemSpec, current_code: str, stress_telem: ExecutionTelemetry
-    ) -> Tuple[Optional[JevVerdict], LLMTelemetry]:
+    ) -> tuple[JevVerdict | None, LLMTelemetry]:
         """Node 3: Jev Critic inspecting code and stress telemetry."""
         prompt = (
             "<|im_start|>system\n"
@@ -227,7 +233,7 @@ class HRMAgentLoop:
                 pass
         return None, telem
 
-    def _test_against_samples(self, code: str, spec: ProblemSpec) -> Tuple[bool, Optional[str], ExecutionTelemetry]:
+    def _test_against_samples(self, code: str, spec: ProblemSpec) -> tuple[bool, str | None, ExecutionTelemetry]:
         """Run candidate against sample test cases."""
         last_telem = ExecutionTelemetry(
             verdict="AC",
@@ -254,13 +260,13 @@ class HRMAgentLoop:
                     err_msg = f"Compilation Error:\n{telem.stderr}"
                 elif telem.verdict == "WA":
                     err_msg = (
-                        f"Wrong Answer on Sample {i+1}:\n"
+                        f"Wrong Answer on Sample {i + 1}:\n"
                         f"Input:\n{inp.strip()}\n"
                         f"Expected:\n{out.strip()}\n"
                         f"Got:\n{telem.stdout.strip()}"
                     )
                 else:
-                    err_msg = f"{telem.verdict} on Sample {i+1} (exit {telem.exit_code}):\n{telem.stderr}"
+                    err_msg = f"{telem.verdict} on Sample {i + 1} (exit {telem.exit_code}):\n{telem.stderr}"
                 return False, err_msg, telem
 
         return True, None, last_telem
@@ -269,13 +275,13 @@ class HRMAgentLoop:
         """Execute the full closed-loop HRM competitive programming solving process."""
         trace = AgentTrace(problem_id=spec.id)
         planner_escalations = 0
-        critique_context: Optional[str] = None
+        critique_context: str | None = None
 
         while planner_escalations <= self.max_planner_escalations:
             trace.macro_steps += 1
 
             # 1. Macro-Step: Algorithmic Planning (Node 1)
-            blueprints: List[PlannerBlueprint] = []
+            blueprints: list[PlannerBlueprint] = []
             for _ in range(self.n_plans):
                 bp, telem = self._run_planner(spec, critique_context)
                 trace.llm_metrics.append(telem)
@@ -301,7 +307,7 @@ class HRMAgentLoop:
             active_blueprint = blueprints[0]
 
             # 2. Asymmetric Test-Time Scaling: Draw candidates from Node 2
-            candidate_codes: List[str] = []
+            candidate_codes: list[str] = []
             for i in range(self.n_candidates):
                 temp = 0.6 if i > 0 else 0.2
                 code, telem = self._run_coder_plan_to_code(spec, active_blueprint, temp=temp)
@@ -310,9 +316,9 @@ class HRMAgentLoop:
                 trace.candidate_codes.append(code)
 
             # Test candidates against samples
-            passing_candidate: Optional[str] = None
-            last_err_msg: Optional[str] = None
-            last_telem: Optional[ExecutionTelemetry] = None
+            passing_candidate: str | None = None
+            last_err_msg: str | None = None
+            last_telem: ExecutionTelemetry | None = None
 
             for code in candidate_codes:
                 passed, err_msg, telem = self._test_against_samples(code, spec)
@@ -385,7 +391,9 @@ class HRMAgentLoop:
                 else:
                     # Localized fix routed back to Node 2 via unified diff
                     diff_text, d_telem = self._run_coder_error_to_diff(
-                        spec, current_code, f"Critic directive: {verdict.patch_directive}"
+                        spec,
+                        current_code,
+                        f"Critic directive: {verdict.patch_directive}",
                     )
                     trace.llm_metrics.append(d_telem)
                     trace.patches.append(diff_text)

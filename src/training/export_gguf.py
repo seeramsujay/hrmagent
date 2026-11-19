@@ -7,13 +7,12 @@ Implements:
 4. F16 vs Quantized GBNF / compile parity verification gate.
 """
 
-import os
-import sys
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any
 
 
 def build_calibration_dataset(
@@ -27,9 +26,9 @@ def build_calibration_dataset(
     out_file = Path(output_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
-    blueprints: List[str] = []
-    codes_and_diffs: List[str] = []
-    critics: List[str] = []
+    blueprints: list[str] = []
+    codes_and_diffs: list[str] = []
+    critics: list[str] = []
 
     cur_dir = Path(curated_data_dir)
     bp_file = cur_dir / "node1_blueprints.jsonl"
@@ -70,8 +69,8 @@ def build_calibration_dataset(
         )
     if not codes_and_diffs:
         codes_and_diffs.append(
-            '#include <iostream>\n#include <vector>\nusing namespace std;\nint main() {\n'
-            '    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    return 0;\n}'
+            "#include <iostream>\n#include <vector>\nusing namespace std;\nint main() {\n"
+            "    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    return 0;\n}"
         )
     if not critics:
         critics.append(
@@ -90,8 +89,7 @@ def build_calibration_dataset(
         merged_corpus.append(critics[i % len(critics)])
 
     with open(out_file, "w", encoding="utf-8") as f:
-        for chunk in merged_corpus:
-            f.write(chunk.strip() + "\n\n")
+        f.writelines(chunk.strip() + "\n\n" for chunk in merged_corpus)
 
     print(f"[HRM Export] Wrote {len(merged_corpus)} calibration samples to {out_file}")
     return str(out_file)
@@ -100,8 +98,8 @@ def build_calibration_dataset(
 def merge_peft_adapter(base_model_path: str, adapter_path: str, merged_output_path: str) -> str:
     """Merge LoRA adapter weights into base model weights and save to disk."""
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     print(f"[HRM Export] Merging adapter {adapter_path} into base model {base_model_path}...")
     tokenizer = AutoTokenizer.from_pretrained(base_model_path, trust_remote_code=True)
@@ -125,8 +123,8 @@ def quantize_model(
     f16_gguf_path: str,
     output_gguf_path: str,
     quant_type: str = "Q4_K_M",
-    calibration_file: Optional[str] = None,
-    imatrix_output_path: Optional[str] = None,
+    calibration_file: str | None = None,
+    imatrix_output_path: str | None = None,
 ) -> str:
     """
     Quantize GGUF model using llama-imatrix and llama-quantize.
@@ -145,13 +143,17 @@ def quantize_model(
     imatrix_file = None
     if imatrix_bin and calibration_file and os.path.exists(calibration_file):
         imatrix_file = imatrix_output_path or f16_gguf_path + ".imatrix.dat"
-        print(f"[HRM Export] Computing importance matrix via llama-imatrix...")
+        print("[HRM Export] Computing importance matrix via llama-imatrix...")
         cmd_imatrix = [
             imatrix_bin,
-            "-m", f16_gguf_path,
-            "-f", calibration_file,
-            "-o", imatrix_file,
-            "--chunks", "32",
+            "-m",
+            f16_gguf_path,
+            "-f",
+            calibration_file,
+            "-o",
+            imatrix_file,
+            "--chunks",
+            "32",
         ]
         try:
             subprocess.run(cmd_imatrix, check=True)
@@ -179,8 +181,8 @@ def quantize_model(
 def run_parity_gate(
     f16_model_engine: Any,
     quant_model_engine: Any,
-    test_prompts: List[Tuple[str, str]],  # (prompt, grammar_path)
-) -> Dict[str, Any]:
+    test_prompts: list[tuple[str, str]],  # (prompt, grammar_path)
+) -> dict[str, Any]:
     """
     F16 vs Quantized GBNF / compile parity verification gate.
     Verifies that quantized model does not degrade grammar compliance or compilation rate.
@@ -189,7 +191,12 @@ def run_parity_gate(
     quant_passes = 0
     total = len(test_prompts)
 
-    report = {"total": total, "f16_passes": 0, "quant_passes": 0, "parity_passed": False}
+    report = {
+        "total": total,
+        "f16_passes": 0,
+        "quant_passes": 0,
+        "parity_passed": False,
+    }
 
     for prompt, grammar_path in test_prompts:
         txt_f16, _ = f16_model_engine.generate(prompt=prompt, grammar_path=grammar_path)
