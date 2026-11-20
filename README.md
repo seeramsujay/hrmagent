@@ -1,3 +1,20 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="hrmagent Logo" width="120" height="120" />
+</p>
+
+<h1 align="center">hrmagent</h1>
+
+<p align="center">
+  <em>**HRM-4M** is an autonomous coding agent framework engineered for resource-constrained hardware (consumer laptop GPUs with $\le 6$ GB VRAM). It overcomes the historical "intelligence ceiling" of sub-2B parameter models on complex multi-file software engineering and competitive programming by synthes</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Status-Maintained-success?style=flat-square" alt="Status" />
+  <img src="https://img.shields.io/badge/License-Protected-blue?style=flat-square" alt="License" />
+</p>
+
+---
+
 # HRM-4M: Hierarchical Reasoning Model Autonomous Coding Agent
 
 [![CI Status](https://img.shields.io/badge/CI-Passing-brightgreen.svg)](https://github.com/seeramsujay/hrmagent/actions)
