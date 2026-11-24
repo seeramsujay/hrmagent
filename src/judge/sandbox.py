@@ -51,6 +51,18 @@ def normalize_output(text: str) -> str:
     return "\n".join(line.rstrip() for line in text.strip().splitlines())
 
 
+def _detect_executable(binary: str, probe_args: list[str]) -> str | None:
+    """Return path to binary if it exists and can be executed in the current environment."""
+    path = shutil.which(binary)
+    if not path:
+        return None
+    try:
+        subprocess.run([path, *probe_args], capture_output=True, timeout=1.0)
+        return path
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
 class SandboxRunner:
     """Manages compilation and sandboxed execution of C++20 and Python solutions."""
 
@@ -63,7 +75,8 @@ class SandboxRunner:
         self.cpu_affinity_mask = cpu_affinity_mask
         self.nsjail_bin = shutil.which("nsjail")
         self.bwrap_bin = shutil.which("bwrap")
-        self.prlimit_bin = shutil.which("prlimit")
+        self.prlimit_bin = _detect_executable("prlimit", ["--version"])
+        self.time_bin = _detect_executable("time", ["--version"])
 
     def compile_cpp(
         self, source_path: Path, output_binary_path: Path, timeout_seconds: float = 10.0
@@ -112,8 +125,8 @@ class SandboxRunner:
         mem_bytes = (memory_limit_mb + 64) * 1024 * 1024
         cpu_secs = max(1, int(time_limit_ms / 1000.0) + 1)
 
-        time_bin = shutil.which("time")
-        prlimit_bin = shutil.which("prlimit")
+        time_bin = self.time_bin
+        prlimit_bin = self.prlimit_bin
 
         # Preferred execution path: wrap with prlimit (and optionally /usr/bin/time -v) to enforce
         # exact resource bounds while avoiding Python fork COW memory overhead
@@ -277,114 +290,83 @@ class SandboxRunner:
                     sandbox_engine="setrlimit",
                 )
 
-        # Fallback to direct wait4 fork if external tools are completely missing
-        rlimit_as_bytes = mem_bytes
-        cpu_limit_secs = cpu_secs
+        # Fallback: spawn a lightweight Python trampoline (via posix_spawn, avoiding parent RSS inheritance)
+        rusage_fd, rusage_path_str = tempfile.mkstemp(prefix="hrm_wait4_", suffix=".json")
+        os.close(rusage_fd)
+        rusage_path = Path(rusage_path_str)
 
-        read_in, write_in = os.pipe()
-        read_out, write_out = os.pipe()
-        read_err, write_err = os.pipe()
+        trampoline = (
+            "import json,os,resource,sys\n"
+            "rp,cs,mb=sys.argv[1],int(sys.argv[2]),int(sys.argv[3])\n"
+            "cmd=sys.argv[4:]\n"
+            "pid=os.fork()\n"
+            "if pid==0:\n"
+            "    try:\n"
+            "        resource.setrlimit(resource.RLIMIT_CORE,(0,0))\n"
+            "        if hasattr(resource,'RLIMIT_CPU'): resource.setrlimit(resource.RLIMIT_CPU,(cs,cs+1))\n"
+            "        if hasattr(resource,'RLIMIT_AS'): resource.setrlimit(resource.RLIMIT_AS,(mb,mb))\n"
+            "        os.execvp(cmd[0],cmd)\n"
+            "    except Exception as e:\n"
+            "        sys.stderr.write(f'Exec failed: {e}\\n')\n"
+            "        os._exit(127)\n"
+            "_,st,ru=os.wait4(pid,0)\n"
+            "with open(rp,'w') as f:\n"
+            "    json.dump({'status':st,'ru_utime':ru.ru_utime,'ru_stime':ru.ru_stime,'ru_maxrss':ru.ru_maxrss},f)\n"
+        )
 
+        trampoline_cmd = [sys.executable, "-c", trampoline, str(rusage_path), str(cpu_secs), str(mem_bytes), *cmd]
         start_wall = time.perf_counter()
-        pid = os.fork()
-
-        if pid == 0:
-            try:
-                os.close(write_in)
-                os.close(read_out)
-                os.close(read_err)
-
-                os.dup2(read_in, 0)
-                os.dup2(write_out, 1)
-                os.dup2(write_err, 2)
-
-                os.close(read_in)
-                os.close(write_out)
-                os.close(write_err)
-
-                resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-                if hasattr(resource, "RLIMIT_CPU"):
-                    resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit_secs, cpu_limit_secs + 1))
-                if hasattr(resource, "RLIMIT_AS"):
-                    resource.setrlimit(resource.RLIMIT_AS, (rlimit_as_bytes, rlimit_as_bytes))
-
-                os.chdir(str(cwd))
-                os.execvp(cmd[0], cmd)
-            except Exception as e:
-                sys.stderr.write(f"Exec failed: {e}\n")
-                os._exit(127)
-
-        os.close(read_in)
-        os.close(write_out)
-        os.close(write_err)
-
-        try:
-            if input_data:
-                os.write(write_in, input_data.encode("utf-8"))
-        except BrokenPipeError:
-            pass
-        finally:
-            os.close(write_in)
-
+        proc = None
+        stdout_str = ""
+        stderr_str = ""
         status = 0
-        rusage = None
-        terminated = False
-
-        while True:
-            elapsed = time.perf_counter() - start_wall
-            if elapsed > wall_limit_secs:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                terminated = True
-
-            try:
-                waited_pid, status, rusage = os.wait4(pid, os.WNOHANG)
-                if waited_pid == pid:
-                    break
-            except ChildProcessError:
-                break
-            time.sleep(0.005)
-
-        end_wall = time.perf_counter()
-        wall_clock_ms = (end_wall - start_wall) * 1000.0
-
-        out_bytes = b""
-        err_bytes = b""
-        try:
-            while True:
-                chunk = os.read(read_out, 65536)
-                if not chunk:
-                    break
-                out_bytes += chunk
-        except Exception:
-            pass
-        finally:
-            os.close(read_out)
-
-        try:
-            while True:
-                chunk = os.read(read_err, 65536)
-                if not chunk:
-                    break
-                err_bytes += chunk
-        except Exception:
-            pass
-        finally:
-            os.close(read_err)
-
-        stdout_str = out_bytes.decode("utf-8", errors="replace")
-        stderr_str = err_bytes.decode("utf-8", errors="replace")
-
         cpu_time_ms = 0.0
         peak_rss_kb = 0
-        if rusage:
-            cpu_time_ms = (rusage.ru_utime + rusage.ru_stime) * 1000.0
-            peak_rss_kb = rusage.ru_maxrss
+        terminated = False
+
+        try:
+            proc = subprocess.Popen(
+                trampoline_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=False,
+                cwd=str(cwd),
+                start_new_session=True,
+            )
+            input_bytes = input_data.encode("utf-8") if isinstance(input_data, str) else input_data
+            raw_out, raw_err = proc.communicate(input=input_bytes, timeout=wall_limit_secs)
+            wall_clock_ms = (time.perf_counter() - start_wall) * 1000.0
+            stdout_str = raw_out.decode("utf-8", errors="replace")
+            stderr_str = raw_err.decode("utf-8", errors="replace")
+            if rusage_path.exists():
+                try:
+                    info = json.loads(rusage_path.read_text(encoding="utf-8"))
+                    status = int(info.get("status", 0))
+                    cpu_time_ms = (float(info.get("ru_utime", 0.0)) + float(info.get("ru_stime", 0.0))) * 1000.0
+                    peak_rss_kb = int(info.get("ru_maxrss", 0))
+                except Exception:
+                    status = proc.returncode or 0
+        except subprocess.TimeoutExpired:
+            terminated = True
+            if proc is not None:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                try:
+                    proc.communicate(timeout=1.0)
+                except Exception:
+                    pass
+            wall_clock_ms = (time.perf_counter() - start_wall) * 1000.0
+        finally:
+            try:
+                rusage_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
         exit_code = 0
-        verdict = "AC"
+        verdict: VerdictType = "AC"
 
         if terminated:
             verdict = "TLE"
@@ -395,7 +377,10 @@ class SandboxRunner:
             if sig == signal.SIGXCPU:
                 verdict = "TLE"
             elif sig in (signal.SIGSEGV, signal.SIGABRT, signal.SIGBUS):
-                verdict = "RE"
+                if peak_rss_kb > memory_limit_mb * 1024 or "MemoryError" in stderr_str or "std::bad_alloc" in stderr_str:
+                    verdict = "MLE"
+                else:
+                    verdict = "RE"
             elif sig == signal.SIGKILL:
                 verdict = "TLE"
             else:
@@ -403,7 +388,10 @@ class SandboxRunner:
         elif os.WIFEXITED(status):
             exit_code = os.WEXITSTATUS(status)
             if exit_code != 0:
-                verdict = "RE"
+                if peak_rss_kb > memory_limit_mb * 1024 or "MemoryError" in stderr_str or "std::bad_alloc" in stderr_str:
+                    verdict = "MLE"
+                else:
+                    verdict = "RE"
         else:
             verdict = "RE"
 

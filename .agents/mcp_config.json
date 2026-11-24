@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "hrmagent": {
+      "command": "./bin/hrmagent",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

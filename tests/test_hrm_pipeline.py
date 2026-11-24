@@ -13,7 +13,7 @@ import json
 import os
 from pathlib import Path
 
-import llama_cpp
+import pytest
 
 from hrm_agent.hrm_loop import HRMAgentLoop
 from hrm_agent.llm_engine import MockLLMEngine
@@ -36,6 +36,7 @@ from judge.sandbox import SandboxRunner
 # =====================================================================
 def test_gbnf_grammars_load():
     """Verify that all 5 GBNF grammar files compile without error in llama_cpp."""
+    llama_cpp = pytest.importorskip("llama_cpp")
     grammar_dir = Path("grammars")
     grammar_files = [
         "planner.gbnf",

@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+TOOLS_DIR="$(cd "${ROOT_DIR}/.." && pwd)/.tools"
+
+if [[ -d "${TOOLS_DIR}/python" ]]; then
+    export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-${TOOLS_DIR}/python}"
+fi
+
+resolve_uv() {
+    if command -v uv >/dev/null 2>&1; then
+        command -v uv
+    elif [[ -x "${TOOLS_DIR}/bin/uv" ]]; then
+        echo "${TOOLS_DIR}/bin/uv"
+    elif [[ -x "${HOME}/.local/bin/uv" ]]; then
+        echo "${HOME}/.local/bin/uv"
+    else
+        echo "uv not found in PATH, ${TOOLS_DIR}/bin/uv, or ~/.local/bin/uv" >&2
+        exit 1
+    fi
+}
+
+UV_BIN="$(resolve_uv)"
+
+run_py() {
+    exec "${UV_BIN}" run --project "${ROOT_DIR}" --no-sync --quiet python "$@"
+}
+
+show_help() {
+    cat << EOF
+hrmagent // Hierarchical Reasoning Model Coding Agent (HRM-4M)
+
+Usage:
+  hrmagent acp [options]            Run Agent Client Protocol (ACP) stdio JSON-RPC server
+  hrmagent mcp [options]            Run Model Context Protocol (MCP) server (stdio/http/sse)
+  hrmagent serve [options]          Launch localhost OpenAI-compatible + HRM REST server
+  hrmagent solve [options]          Run 3-node HRM closed-loop solver on a problem JSON
+  hrmagent 4m-solve [options]       Run 4-Model HRM pipeline on a problem JSON
+  hrmagent terminalbench [options]  Run 5-task TerminalBench diagnostic suite
+  hrmagent harness [options]        Run automated HTTP evaluation harness
+  hrmagent eval-benchmark [options] Run 3-way ablation benchmark suite
+  hrmagent setup-mcp                Install hrmagent MCP server in ~/.gemini/config/mcp_config.json
+  hrmagent setup-skill              Install hrmagent AGY skill in ~/.gemini/config/skills/hrmagent/
+  hrmagent setup-claude             Install hrmagent MCP & skill for Claude Code / Claude Desktop
+  hrmagent setup-zed                Install HRMAgent ACP agent_server in ~/.config/zed/settings.json
+  hrmagent setup-all                Run setup-mcp, setup-skill, setup-claude, and setup-zed
+
+Options:
+  --mode <4m|dual-pair|code-action|mock>  Execution mode (ACP default: 4m; MCP/serve default: mock)
+  --device <auto|cpu|cuda>                Compute device
+  --acp-backend <agy|claude|cmd>          Delegate LLM nodes to an external ACP agent
+  --transport <stdio|streamable-http|sse> MCP transport (default: stdio)
+  --port <port>                           Server/MCP port (default: 8000 / 8093)
+  -h, --help                              Show this help message
+EOF
+}
+
+setup_mcp_agy() {
+    local cfg_file="${HOME}/.gemini/config/mcp_config.json"
+    mkdir -p "${HOME}/.gemini/config"
+    python3 -c "
+import json, os
+cfg_file = os.path.expanduser('~/.gemini/config/mcp_config.json')
+data = {}
+if os.path.exists(cfg_file):
+    try:
+        with open(cfg_file, 'r') as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+data.setdefault('mcpServers', {})['hrmagent'] = {
+    'command': '${ROOT_DIR}/bin/hrmagent',
+    'args': ['mcp']
+}
+with open(cfg_file, 'w') as f:
+    json.dump(data, f, indent=2)
+print(f'Successfully configured hrmagent MCP server in {cfg_file}')
+"
+}
+
+setup_skill_agy() {
+    local target_dir="${HOME}/.gemini/config/skills/hrmagent"
+    mkdir -p "${target_dir}"
+    cp -f "${ROOT_DIR}/.agents/skills/hrmagent/SKILL.md" "${target_dir}/SKILL.md" 2>/dev/null || true
+    echo "Successfully installed hrmagent skill into ${target_dir}/SKILL.md"
+}
+
+setup_claude() {
+    local claude_json="${HOME}/.claude.json"
+    local desktop_cfg="${HOME}/.config/Claude/claude_desktop_config.json"
+    local skill_dir="${HOME}/.claude/skills/hrmagent"
+    mkdir -p "${HOME}/.config/Claude" "${skill_dir}"
+    cp -f "${ROOT_DIR}/.agents/skills/hrmagent/SKILL.md" "${skill_dir}/SKILL.md" 2>/dev/null || true
+    python3 -c "
+import json, os
+for cfg_file in ['${claude_json}', '${desktop_cfg}']:
+    data = {}
+    if os.path.exists(cfg_file):
+        try:
+            with open(cfg_file, 'r') as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    data.setdefault('mcpServers', {})['hrmagent'] = {
+        'command': '${ROOT_DIR}/bin/hrmagent',
+        'args': ['mcp']
+    }
+    with open(cfg_file, 'w') as f:
+        json.dump(data, f, indent=2)
+    print(f'Successfully configured hrmagent MCP in {cfg_file}')
+"
+    if command -v claude >/dev/null 2>&1; then
+        claude mcp add --scope user hrmagent -- "${ROOT_DIR}/bin/hrmagent" mcp >/dev/null 2>&1 || true
+    fi
+}
+
+setup_zed() {
+    local zed_settings="${HOME}/.config/zed/settings.json"
+    mkdir -p "${HOME}/.config/zed"
+    python3 -c "
+import json, os
+path = '${zed_settings}'
+data = {}
+if os.path.exists(path):
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+data.setdefault('agent_servers', {})['HRMAgent'] = {
+    'type': 'custom',
+    'command': '${ROOT_DIR}/bin/hrmagent',
+    'args': ['acp']
+}
+with open(path, 'w') as f:
+    json.dump(data, f, indent=2)
+print(f'Successfully configured HRMAgent ACP in {path}')
+"
+}
+
+COMMAND="${1:-}"
+
+case "${COMMAND}" in
+    ""|-h|--help|help)
+        show_help
+        exit 0
+        ;;
+    acp)
+        shift
+        run_py -m hrm_agent.acp_server "$@"
+        ;;
+    mcp)
+        shift
+        run_py -m hrm_agent.mcp_server "$@"
+        ;;
+    setup-mcp)
+        setup_mcp_agy
+        exit 0
+        ;;
+    setup-skill)
+        setup_skill_agy
+        exit 0
+        ;;
+    setup-claude)
+        setup_claude
+        exit 0
+        ;;
+    setup-zed)
+        setup_zed
+        exit 0
+        ;;
+    setup-all)
+        setup_mcp_agy
+        setup_skill_agy
+        setup_claude
+        setup_zed
+        exit 0
+        ;;
+    *)
+        run_py -m hrm_agent.cli "$@"
+        ;;
+esac

@@ -191,6 +191,7 @@ def solve_problem(
     problem_file: str = typer.Option(..., help="Path to JSON problem specification file"),
     language: str = typer.Option("cpp", help="Target language ('cpp' or 'python')"),
     mock: bool = typer.Option(False, help="Use deterministic mock LLM for testing/demo"),
+    acp_backend: Optional[str] = typer.Option(None, help="Use an ACP agent ('agy', 'claude', or cmd) as LLM backend"),
     trace_output: str | None = typer.Option(None, help="Optional JSONL file to persist trace"),
 ):
     """Solve a competitive programming problem using the 3-node HRM closed-loop pipeline."""
@@ -200,7 +201,14 @@ def solve_problem(
         spec_data = json.load(f)
     spec = ProblemSpec.model_validate(spec_data)
 
-    if mock:
+    if acp_backend:
+        from hrm_agent.acp_client import AcpLLMEngine
+
+        acp_eng = AcpLLMEngine(backend=acp_backend)
+        planner_engine = acp_eng
+        coder_engine = acp_eng
+        critic_engine = acp_eng
+    elif mock:
         planner_engine = MockLLMEngine()
         coder_engine = MockLLMEngine()
         critic_engine = MockLLMEngine()
@@ -480,6 +488,7 @@ def cli_four_model_solve(
     problem_file: str = typer.Option(..., help="Path to JSON file containing ProblemSpec"),
     language: str = typer.Option("python", help="Target language ('python', 'cpp', 'typescript', 'kotlin')"),
     device: str = typer.Option("auto", help="Compute device ('auto', 'cuda', 'cpu')"),
+    acp_backend: Optional[str] = typer.Option(None, help="Optional ACP backend ('agy', 'claude', or cmd)"),
 ):
     """Execute complete 4-Model Hierarchical Reasoning Pipeline (HRM -> Supervisor -> Coder -> Verifier)."""
     console.print(Panel.fit("[bold magenta]Executing 4-Model Hierarchical Reasoning Agent[/bold magenta]"))
@@ -490,7 +499,18 @@ def cli_four_model_solve(
         spec_dict = json.load(f)
     spec = ProblemSpec.model_validate(spec_dict)
 
-    agent = FourModelAgent(device=device)
+    if acp_backend:
+        from hrm_agent.acp_client import AcpLLMEngine
+
+        acp_eng = AcpLLMEngine(backend=acp_backend)
+        agent = FourModelAgent(
+            supervisor_engine=acp_eng,
+            coder_engine=acp_eng,
+            verifier_engine=acp_eng,
+            device=device,
+        )
+    else:
+        agent = FourModelAgent(device=device)
     trace = agent.solve(spec, language=language)  # type: ignore
 
     status_color = "green" if trace.solved else "red"
@@ -500,6 +520,53 @@ def cli_four_model_solve(
     if trace.synthesized_code:
         console.print("[dim]Synthesized Code:[/dim]")
         console.print(trace.synthesized_code[:300] + "...")
+
+
+@app.command("mcp")
+def cli_mcp(
+    transport: str = typer.Option("stdio", help="MCP transport: stdio, streamable-http, or sse"),
+    port: int = typer.Option(8093, help="Port for HTTP/SSE transport"),
+    mode: str = typer.Option("mock", help="Engine mode: mock or dual-pair"),
+    device: str = typer.Option("auto", help="Compute device: auto, cpu, or cuda"),
+):
+    """Run Model Context Protocol (MCP) server for Antigravity, Claude, and Zed."""
+    import logging
+    import sys
+
+    from hrm_agent.mcp_server import HrmAgentMcpApp
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+    mcp_app = HrmAgentMcpApp(mode=mode, device=device)
+    if transport == "stdio":
+        mcp_app.run(transport="stdio")
+    else:
+        mcp_app.run(transport=transport, port=port)
+
+
+@app.command("acp")
+def cli_acp(
+    mode: str = typer.Option("4m", help="Default ACP mode: 4m, dual-pair, or code-action"),
+    device: str = typer.Option("auto", help="Compute device: auto, cpu, or cuda"),
+    acp_backend: Optional[str] = typer.Option(None, help="Optional ACP backend ('agy', 'claude', or cmd)"),
+):
+    """Run Agent Client Protocol (ACP) stdio JSON-RPC server."""
+    import asyncio
+    import logging
+    import sys
+
+    from hrm_agent.acp_server import HrmAgentAcpServer
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+    server = HrmAgentAcpServer(default_mode=mode, device=device, acp_backend=acp_backend)
+    asyncio.run(server.serve_stdio())
 
 
 if __name__ == "__main__":
