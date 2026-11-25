@@ -2,11 +2,13 @@
 
 import json
 
+import pytest
 from starlette.testclient import TestClient
 
 from hrm_agent.harness import HRMHarnessClient, load_harness_problems
 from hrm_agent.schemas import ProblemSpec
 from hrm_agent.server import create_app
+from judge.sandbox import SandboxRunner
 
 
 def test_server_health_and_models():
@@ -289,7 +291,46 @@ def test_server_four_model_solve_endpoint():
     assert resp.status_code == 200
     data = resp.json()
     assert data["problem_id"] == "SERVER-4M-FLOW017"
+    assert data["engine"] == "mock"
     assert data["solved"] is True
     assert data["final_verdict"] == "AC"
-    assert "latent_invariant" in data
-    assert "def solve():" in data["synthesized_code"]
+    assert data["synthesized_code"]
+
+
+def test_server_rejects_checker_code_on_every_solve_route():
+    """Caller-supplied checkers would execute on the server, including ones a blocklist would miss."""
+    client = TestClient(create_app(mode="mock"))
+    spec = {"id": "X", "title": "X", "description": "X", "checker_code": "import os\nos.popen('id')\n"}
+
+    for path in ("/solve", "/v1/solve", "/v1/4m/solve"):
+        assert client.post(path, json=spec).status_code == 400
+    for path in ("/evaluate", "/v1/evaluate"):
+        assert client.post(path, json={"problems": [spec]}).status_code == 400
+
+
+def test_real_engine_mode_refuses_unisolated_execution(monkeypatch):
+    monkeypatch.delenv("HRM_ALLOW_UNSANDBOXED", raising=False)
+    app = create_app(mode="mock")
+    client = TestClient(app)
+    client.get("/health")  # creates the server state
+    app.state.server_state.mode = "dual-pair"
+    app.state.server_state.sandbox.engine = "setrlimit"
+    spec = {"id": "X", "title": "X", "description": "X"}
+
+    for path in ("/solve", "/v1/4m/solve"):
+        assert client.post(path, json=spec).status_code == 503
+    assert client.post("/evaluate", json={"problems": [spec]}).status_code == 503
+
+
+def test_nsjail_failure_does_not_replay_on_host(monkeypatch, tmp_path):
+    runner = SandboxRunner(engine="nsjail")
+    runner.nsjail_bin, runner.bwrap_bin = "nsjail", None
+    runner.allow_unisolated_fallback = False
+
+    def broken(*args, **kwargs):
+        raise OSError("jail failed")
+
+    monkeypatch.setattr("judge.sandbox.subprocess.Popen", broken)
+    monkeypatch.setattr(runner, "_execute_with_wait4", lambda *a, **k: pytest.fail("ran on the host"))
+    with pytest.raises(OSError):
+        runner._execute_nsjail(["true"], "", 1000, 64, tmp_path)

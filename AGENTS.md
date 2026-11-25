@@ -18,7 +18,7 @@ Autonomous agent guide for interacting with `hrmagent` (HRM-4M).
 
 ## Recommended Workflow for Agents
 
-1. **Invariant Discovery (`hrm_discover_invariant`):** Extract mathematical/algorithmic paradigm and latent invariant before writing code.
+1. **Maze solving (`hrm_solve_maze`):** Sapient's HRM checkpoint, for 30x30 grid path problems only.
 2. **Closed-Loop Synthesis (`hrm_solve_4m` / `hrm_solve_loop`):** Synthesize solution code with System-2 blueprints and closed-loop sample verification.
 3. **Sandboxed Verification (`hrm_verify_code` / `hrm_run_code_action`):** Validate patches against test cases with CPU/RSS `os.wait4` telemetry.
 4. **ACP Delegation:** Use `hrmagent acp` directly from Zed / `remote-zed` / ACP clients, or pass `--acp-backend agy|claude` so `HRMAgentLoop` / `FourModelAgent` call external ACP agents.

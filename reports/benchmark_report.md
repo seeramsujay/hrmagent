@@ -1,3 +1,9 @@
+> **Correction (2026-11-25).** HRM claims written before this date did not use Sapient's HRM. The code
+> behind them was an untrained or random-weight stand-in (in `hrmagent`, plus keyword matching and
+> hand-written solutions picked by problem name). Treat HRM results, latencies and pass rates in this
+> document as invalid. The real model is a task-specific grid solver: see `training/README.md` at the
+> monorepo root.
+
 # Comprehensive Benchmark & Model Evaluation Report
 **Hardware Acceleration**: NVIDIA GeForce RTX 4050 Laptop GPU (6,141 MiB VRAM)  
 **Software Stack**: CUDA 13.0, Driver 580.178.04, PyTorch 2.x, Transformers 4.x, TRL 1.17, PEFT 0.14  

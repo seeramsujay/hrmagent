@@ -6,6 +6,7 @@ Extracts os.wait4 telemetry (ru_utime, ru_stime, ru_maxrss), wall-clock ms, and 
 CE, AC, WA, TLE, MLE, RE.
 """
 
+import json
 import os
 import resource
 import shutil
@@ -72,6 +73,8 @@ class SandboxRunner:
         cpu_affinity_mask: str | None = None,
     ):
         self.engine = engine or detect_sandbox_engine()
+        # When False, a jail that fails at runtime raises instead of running the code unisolated.
+        self.allow_unisolated_fallback = True
         self.cpu_affinity_mask = cpu_affinity_mask
         self.nsjail_bin = shutil.which("nsjail")
         self.bwrap_bin = shutil.which("bwrap")
@@ -304,7 +307,7 @@ class SandboxRunner:
             "    try:\n"
             "        resource.setrlimit(resource.RLIMIT_CORE,(0,0))\n"
             "        if hasattr(resource,'RLIMIT_CPU'): resource.setrlimit(resource.RLIMIT_CPU,(cs,cs+1))\n"
-            "        if hasattr(resource,'RLIMIT_AS'): resource.setrlimit(resource.RLIMIT_AS,(mb,mb))\n"
+            "        if hasattr(resource,'RLIMIT_AS') and sys.platform!='darwin': resource.setrlimit(resource.RLIMIT_AS,(mb,mb))\n"
             "        os.execvp(cmd[0],cmd)\n"
             "    except Exception as e:\n"
             "        sys.stderr.write(f'Exec failed: {e}\\n')\n"
@@ -345,6 +348,8 @@ class SandboxRunner:
                     status = int(info.get("status", 0))
                     cpu_time_ms = (float(info.get("ru_utime", 0.0)) + float(info.get("ru_stime", 0.0))) * 1000.0
                     peak_rss_kb = int(info.get("ru_maxrss", 0))
+                    if sys.platform == "darwin":  # macOS reports bytes, Linux reports KiB
+                        peak_rss_kb //= 1024
                 except Exception:
                     status = proc.returncode or 0
         except subprocess.TimeoutExpired:
@@ -377,7 +382,11 @@ class SandboxRunner:
             if sig == signal.SIGXCPU:
                 verdict = "TLE"
             elif sig in (signal.SIGSEGV, signal.SIGABRT, signal.SIGBUS):
-                if peak_rss_kb > memory_limit_mb * 1024 or "MemoryError" in stderr_str or "std::bad_alloc" in stderr_str:
+                if (
+                    peak_rss_kb > memory_limit_mb * 1024
+                    or "MemoryError" in stderr_str
+                    or "std::bad_alloc" in stderr_str
+                ):
                     verdict = "MLE"
                 else:
                     verdict = "RE"
@@ -388,7 +397,11 @@ class SandboxRunner:
         elif os.WIFEXITED(status):
             exit_code = os.WEXITSTATUS(status)
             if exit_code != 0:
-                if peak_rss_kb > memory_limit_mb * 1024 or "MemoryError" in stderr_str or "std::bad_alloc" in stderr_str:
+                if (
+                    peak_rss_kb > memory_limit_mb * 1024
+                    or "MemoryError" in stderr_str
+                    or "std::bad_alloc" in stderr_str
+                ):
                     verdict = "MLE"
                 else:
                     verdict = "RE"
@@ -447,6 +460,10 @@ class SandboxRunner:
             "--chdir",
             str(cwd),
         ]
+        # Python solutions run with sys.executable, which may live in a virtualenv outside /usr.
+        for prefix in sorted({sys.prefix, sys.base_prefix, os.path.realpath(sys.base_prefix)}):
+            if prefix != "/usr" and not prefix.startswith("/usr/"):
+                bwrap_cmd.extend(["--ro-bind-try", prefix, prefix])
         if os.path.exists("/lib64"):
             bwrap_cmd.extend(["--ro-bind", "/lib64", "/lib64"])
         if os.path.exists("/etc"):
@@ -480,6 +497,8 @@ class SandboxRunner:
             exit_code = proc.returncode
             if exit_code != 0 and "bwrap:" in stderr:
                 # bwrap runtime failure (e.g. sandbox permissions); fallback to wait4 setrlimit
+                if not self.allow_unisolated_fallback:
+                    raise RuntimeError(f"bwrap failed and unisolated execution is disabled: {stderr}")
                 return self._execute_with_wait4(cmd, input_data, time_limit_ms, memory_limit_mb, cwd)
 
             verdict: VerdictType = "AC"
@@ -515,6 +534,8 @@ class SandboxRunner:
                 sandbox_engine="bwrap",
             )
         except Exception:
+            if not self.allow_unisolated_fallback:
+                raise
             # Fall back directly to wait4 setrlimit
             return self._execute_with_wait4(cmd, input_data, time_limit_ms, memory_limit_mb, cwd)
 
@@ -604,6 +625,8 @@ class SandboxRunner:
             # Fall back to bwrap or setrlimit
             if self.bwrap_bin:
                 return self._execute_bwrap(cmd, input_data, time_limit_ms, memory_limit_mb, cwd)
+            if not self.allow_unisolated_fallback:
+                raise
             return self._execute_with_wait4(cmd, input_data, time_limit_ms, memory_limit_mb, cwd)
 
     def run_code(

@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <title>hrmagent logo</title>
   <rect width="120" height="120" rx="28" fill="#0f172a" />
   <rect x="2" y="2" width="116" height="116" rx="26" fill="none" stroke="#6366f1" stroke-opacity="0.15" stroke-width="2" />
   <path d="M38 60 C38 48 48 44 54 50 L66 70 C72 76 82 72 82 60 C82 48 72 44 66 50 L54 70 C48 76 38 72 38 60 Z" fill="none" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />

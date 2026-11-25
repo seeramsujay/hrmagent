@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from hrm_agent.acp_client import AcpLLMEngine, resolve_acp_command
-from hrm_agent.acp_server import HrmAgentAcpServer
+from hrm_agent.acp_server import HrmAgentAcpServer, _extract_prompt_text
 
 
 def test_hrm_acp_server_modes_and_commands(tmp_path):
@@ -50,7 +50,12 @@ def test_hrm_acp_server_modes_and_commands(tmp_path):
             assert p_res == {"stopReason": "end_turn"}
 
             await server.handle_message(
-                {"jsonrpc": "2.0", "id": 4, "method": "session/set_mode", "params": {"sessionId": sid, "modeId": "code-action"}}
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "session/set_mode",
+                    "params": {"sessionId": sid, "modeId": "code-action"},
+                }
             )
             ca_res = await server.handle_message(
                 {
@@ -71,7 +76,7 @@ def test_hrm_acp_server_modes_and_commands(tmp_path):
                     "jsonrpc": "2.0",
                     "id": 6,
                     "method": "session/prompt",
-                    "params": {"sessionId": sid, "prompt": "/invariant Nim stone pile game"},
+                    "params": {"sessionId": sid, "prompt": "/help"},
                 }
             )
             assert inv_res == {"stopReason": "end_turn"}
@@ -82,11 +87,12 @@ def test_hrm_acp_server_modes_and_commands(tmp_path):
         chunks = [
             m["params"]["update"]["content"]["text"]
             for m in msgs
-            if m.get("method") == "session/update" and m["params"]["update"].get("sessionUpdate") == "agent_message_chunk"
+            if m.get("method") == "session/update"
+            and m["params"]["update"].get("sessionUpdate") == "agent_message_chunk"
         ]
         joined = "\n".join(chunks)
         assert "Verdict:" in joined
-        assert "game_theory" in joined
+        assert "/maze" in joined
 
     asyncio.run(_run())
 
@@ -94,8 +100,8 @@ def test_hrm_acp_server_modes_and_commands(tmp_path):
 def test_acp_llm_engine_end_to_end_stdio(tmp_path):
     hrm_bin = Path(__file__).resolve().parents[1] / "bin" / "hrmagent"
     engine = AcpLLMEngine(backend=f"{hrm_bin} acp --device cpu", cwd=str(tmp_path), timeout_sec=30.0)
-    text, telem = engine.generate("/invariant Nim stone game with alternating turns")
-    assert "game_theory" in text
+    text, telem = engine.generate("/help")
+    assert "/maze" in text
     assert telem.total_latency_ms > 0
 
 
@@ -104,3 +110,10 @@ def test_hrm_resolve_acp_command():
     assert "acp" in agy_cmd
     claude_cmd = resolve_acp_command("claude")
     assert any("claude-code-acp" in part for part in claude_cmd)
+
+
+def test_maze_prompt_keeps_trailing_free_cells():
+    assert _extract_prompt_text("/maze\n# S \n") == "/maze\n# S "
+    assert _extract_prompt_text([{"type": "text", "text": "/maze\n#G "}]) == "/maze\n#G "
+    assert _extract_prompt_text("/MAZE\n#G ") == "/MAZE\n#G "
+    assert _extract_prompt_text("  hello  ") == "hello"

@@ -3,10 +3,13 @@
 import asyncio
 import json
 
+import pytest
+from mcp.server.mcpserver.exceptions import ToolError
+
 from hrm_agent.mcp_server import HrmAgentMcpApp
 
 
-def test_hrm_mcp_status_and_invariant():
+def test_hrm_mcp_status_and_maze_errors(monkeypatch):
     app = HrmAgentMcpApp(mode="mock", device="cpu")
     assert app.mcp.name == "hrmagent"
 
@@ -15,15 +18,14 @@ def test_hrm_mcp_status_and_invariant():
     st = json.loads(st_raw.content[0].text)
     assert st["service"] == "hrmagent"
 
-    inv_raw = asyncio.run(
-        app.mcp.call_tool(
-            "hrm_discover_invariant",
-            {"problem_description": "Nim stone game with alternating turns to win or lose.", "constraints": "1 <= N <= 10^5"},
-        )
-    )
-    assert not inv_raw.is_error
-    inv = json.loads(inv_raw.content[0].text)
-    assert inv["paradigm"] == "game_theory"
+    # A solver failure is a tool error carrying the reason (clients receive isError: true).
+    # Stubbed so the test does not depend on a PALAIS checkout; PALAIS tests cover grid validation.
+    def reject(maze, device="auto"):
+        raise ValueError("maze must be 30 lines of 30 characters")
+
+    monkeypatch.setattr("hrm_agent.mcp_server.solve_maze", reject)
+    with pytest.raises(ToolError, match="30 lines"):
+        asyncio.run(app.mcp.call_tool("hrm_solve_maze", {"maze": "too small"}))
 
 
 def test_hrm_mcp_solve_4m_and_verify():
@@ -45,6 +47,7 @@ def test_hrm_mcp_solve_4m_and_verify():
     )
     assert not res_raw.is_error
     res = json.loads(res_raw.content[0].text)
+    assert res["engine"] == "mock"
     assert res["solved"] is True
     assert res["final_verdict"] == "AC"
 

@@ -470,28 +470,28 @@ def run_terminal_bench(
     )
 
 
-@app.command("4m-train-latent")
-def cli_train_hrm_latent(
-    output_dir: str = typer.Option("outputs/checkpoints_hrm_latent", help="Destination for trained weights"),
-    epochs: int = typer.Option(5, help="Number of training epochs"),
-    device: str = typer.Option("auto", help="Compute device ('auto', 'cuda', 'cpu')"),
+@app.command("solve-maze")
+def cli_solve_maze(
+    maze_file: str = typer.Argument(..., help="30 lines of '#', ' ', 'S', 'G'"),
+    device: str = typer.Option("auto", help="Compute device ('auto', 'mps', 'cuda', 'cpu')"),
 ):
-    """Train Sapient-style HRM Latent Reasoner on 10k+ stars code and algorithmic invariants."""
-    from training.train_hrm_latent import train_hrm_latent
+    """Solve a 30x30 maze with Sapient's official HRM checkpoint."""
+    from hrm_agent.hrm_model import solve_maze
 
-    saved_file = train_hrm_latent(output_dir=output_dir, epochs=epochs, device=device)
-    console.print(f"[bold green]HRM Latent Model successfully saved to {saved_file}[/bold green]")
+    with open(maze_file, "r", encoding="utf-8") as f:
+        result = solve_maze(f.read(), device=device)
+    console.print(result["solution"], markup=False)
+    console.print(f"valid path: {result['valid_path']}")
 
 
 @app.command("4m-solve")
 def cli_four_model_solve(
     problem_file: str = typer.Option(..., help="Path to JSON file containing ProblemSpec"),
     language: str = typer.Option("python", help="Target language ('python', 'cpp', 'typescript', 'kotlin')"),
-    device: str = typer.Option("auto", help="Compute device ('auto', 'cuda', 'cpu')"),
     acp_backend: Optional[str] = typer.Option(None, help="Optional ACP backend ('agy', 'claude', or cmd)"),
 ):
-    """Execute complete 4-Model Hierarchical Reasoning Pipeline (HRM -> Supervisor -> Coder -> Verifier)."""
-    console.print(Panel.fit("[bold magenta]Executing 4-Model Hierarchical Reasoning Agent[/bold magenta]"))
+    """Execute the Supervisor -> Coder -> Verifier pipeline."""
+    console.print(Panel.fit("[bold magenta]Executing Supervisor/Coder/Verifier Agent[/bold magenta]"))
     from hrm_agent.four_model_agent import FourModelAgent
     from hrm_agent.schemas import ProblemSpec
 
@@ -507,16 +507,14 @@ def cli_four_model_solve(
             supervisor_engine=acp_eng,
             coder_engine=acp_eng,
             verifier_engine=acp_eng,
-            device=device,
         )
     else:
-        agent = FourModelAgent(device=device)
+        console.print("[yellow]No --acp-backend: using the canned mock engine.[/yellow]")
+        agent = FourModelAgent()
     trace = agent.solve(spec, language=language)  # type: ignore
 
     status_color = "green" if trace.solved else "red"
     console.print(f"[{status_color}]Verdict: {trace.final_verdict} (Solved: {trace.solved})[/{status_color}]")
-    console.print(f"[cyan]Latent Invariant:[/cyan] {trace.latent_invariant.get('invariant')}")
-    console.print(f"[cyan]Latent Steps:[/cyan] {trace.latent_invariant.get('latent_steps')}")
     if trace.synthesized_code:
         console.print("[dim]Synthesized Code:[/dim]")
         console.print(trace.synthesized_code[:300] + "...")

@@ -2,7 +2,7 @@
 
 Implements ACP v1 (`initialize`, `session/new`, `session/set_mode`, `session/prompt`,
 `session/cancel`) over newline-delimited JSON-RPC on stdin/stdout, enabling
-Antigravity (`agy`), Claude Code, Zed, and remote-zed to invoke HRM-4M reasoning,
+Antigravity (`agy`), Claude Code, Zed, and remote-zed to invoke hrmagent,
 code-action sandboxing, and TerminalBench verification natively.
 """
 
@@ -23,8 +23,8 @@ from typing import Any, Optional, TextIO
 from hrm_agent.acp_client import AcpLLMEngine
 from hrm_agent.code_agent import CodeActionAgent
 from hrm_agent.four_model_agent import FourModelAgent
-from hrm_agent.hrm_latent_engine import HRMLatentSolver
 from hrm_agent.hrm_loop import HRMAgentLoop
+from hrm_agent.hrm_model import solve_maze
 from hrm_agent.llm_engine import LLMEngine, MockLLMEngine
 from hrm_agent.schemas import ProblemSpec
 from judge.sandbox import SandboxRunner
@@ -47,9 +47,16 @@ class HrmAcpSession:
     active_task: Optional[asyncio.Task[Any]] = field(default=None, repr=False)
 
 
+def _trim_prompt(text: str) -> str:
+    """Strip a prompt, keeping trailing spaces of a /maze grid, where a space is a free cell."""
+    if text.lstrip().lower().startswith("/maze"):
+        return text.lstrip().rstrip("\r\n")
+    return text.strip()
+
+
 def _extract_prompt_text(prompt_field: Any) -> str:
     if isinstance(prompt_field, str):
-        return prompt_field.strip()
+        return _trim_prompt(prompt_field)
     if isinstance(prompt_field, list):
         parts: list[str] = []
         for block in prompt_field:
@@ -65,8 +72,8 @@ def _extract_prompt_text(prompt_field: Any) -> str:
                     parts.append(str(block["text"]))
             elif isinstance(block, str):
                 parts.append(block)
-        return "\n".join(p for p in parts if p).strip()
-    return str(prompt_field or "").strip()
+        return _trim_prompt("\n".join(p for p in parts if p))
+    return _trim_prompt(str(prompt_field or ""))
 
 
 def _parse_problem_spec(prompt_text: str) -> ProblemSpec:
@@ -112,7 +119,6 @@ class HrmAgentAcpServer:
         self._out: TextIO = out_stream or sys.stdout
         self._write_lock = asyncio.Lock()
 
-        self.latent_solver = HRMLatentSolver(device=device)
         self.sandbox = SandboxRunner()
         self.sessions: dict[str, HrmAcpSession] = {}
 
@@ -213,8 +219,8 @@ class HrmAgentAcpServer:
                     "availableModes": [
                         {
                             "id": "4m",
-                            "name": "Four-Model HRM",
-                            "description": "Latent Reasoner -> Supervisor -> Code-Action Worker -> Jev Verifier",
+                            "name": "Supervisor/Coder/Verifier",
+                            "description": "Supervisor -> Code-Action Worker -> Jev Verifier",
                         },
                         {
                             "id": "dual-pair",
@@ -303,14 +309,9 @@ class HrmAgentAcpServer:
 
         spec = _parse_problem_spec(prompt_text)
 
-        # Step 1: Discover latent invariant
-        await self._emit_thought(sid, f"Running HRM latent recurrence on `{spec.id}`...\n")
-        with contextlib.redirect_stdout(sys.stderr):
-            invariant = self.latent_solver.discover_invariant(spec.description, spec.constraints)
-
         if session.mode == "dual-pair":
-            return await self._run_dual_pair(session, spec, invariant)
-        return await self._run_four_model(session, spec, invariant)
+            return await self._run_dual_pair(session, spec)
+        return await self._run_four_model(session, spec)
 
     async def _handle_slash_command(self, session: HrmAcpSession, command_line: str) -> str:
         sid = session.session_id
@@ -323,7 +324,7 @@ class HrmAgentAcpServer:
                 sid,
                 "**hrmagent ACP Commands**\n"
                 "- `/mode <4m|dual-pair|code-action>` — Switch execution pipeline\n"
-                "- `/invariant <problem>` — Discover latent mathematical invariant\n"
+                "- `/maze <30 lines>` — Solve a 30x30 maze with the official HRM checkpoint\n"
                 "- `/terminalbench` — Run TerminalBench 5-task diagnostic suite\n"
                 "- `/status` — Show active engine mode, sandbox, and backend\n",
             )
@@ -334,7 +335,9 @@ class HrmAgentAcpServer:
                 session.mode = arg
                 await self._emit_message(sid, f"Switched session `{sid}` mode to `{arg}`.")
             else:
-                await self._emit_message(sid, f"Current mode: `{session.mode}`. Usage: `/mode <4m|dual-pair|code-action>`.")
+                await self._emit_message(
+                    sid, f"Current mode: `{session.mode}`. Usage: `/mode <4m|dual-pair|code-action>`."
+                )
             return "end_turn"
 
         if cmd == "/status":
@@ -349,10 +352,15 @@ class HrmAgentAcpServer:
             await self._emit_message(sid, f"```json\n{json.dumps(status, indent=2)}\n```")
             return "end_turn"
 
-        if cmd == "/invariant":
-            with contextlib.redirect_stdout(sys.stderr):
-                inv = self.latent_solver.discover_invariant(arg or "Two pointer window", "")
-            await self._emit_message(sid, f"```json\n{json.dumps(inv, indent=2)}\n```")
+        if cmd == "/maze":
+            # Take the grid verbatim: spaces are meaningful, so do not strip lines.
+            grid = command_line.split("\n", 1)[1] if "\n" in command_line else ""
+            try:
+                with contextlib.redirect_stdout(sys.stderr):
+                    res = solve_maze(grid, device=self.device)
+                await self._emit_message(sid, f"```json\n{json.dumps(res, indent=2)}\n```")
+            except Exception as exc:
+                await self._emit_message(sid, f"Maze solve failed: {exc}")
             return "end_turn"
 
         if cmd == "/terminalbench":
@@ -395,23 +403,19 @@ class HrmAgentAcpServer:
         )
         return "end_turn"
 
-    async def _run_four_model(
-        self, session: HrmAcpSession, spec: ProblemSpec, invariant: dict[str, Any]
-    ) -> str:
+    async def _run_four_model(self, session: HrmAcpSession, spec: ProblemSpec) -> str:
         sid = session.session_id
         tc_id = f"tc_{uuid.uuid4().hex[:8]}"
-        await self._emit_tool_start(sid, tc_id, f"Run 4-Model HRM pipeline on {spec.id}", kind="execute")
+        await self._emit_tool_start(sid, tc_id, f"Run Supervisor/Coder/Verifier pipeline on {spec.id}", kind="execute")
 
         engine = self._get_llm_engine(session.cwd)
         with contextlib.redirect_stdout(sys.stderr):
             agent = FourModelAgent(
-                hrm_solver=self.latent_solver,
                 supervisor_engine=engine,
                 coder_engine=engine,
                 verifier_engine=engine,
                 sandbox=self.sandbox,
                 workspace_dir=Path(session.cwd),
-                device=self.device,
             )
             trace = agent.solve(spec, language="python")
 
@@ -425,18 +429,14 @@ class HrmAgentAcpServer:
         await self._emit_message(
             sid,
             f"### HRM-4M Result ({spec.id})\n\n"
-            f"- **Paradigm:** `{invariant.get('paradigm')}`\n"
-            f"- **Latent Invariant:** {invariant.get('invariant')}\n"
-            f"- **Latent Steps:** `{invariant.get('latent_steps')}` (Halt Prob: `{invariant.get('halting_probability')}`)\n"
+            f"- **Engine:** `{self.acp_backend or 'mock'}`\n"
             f"- **Verdict:** `{trace.final_verdict}` (Solved: `{trace.solved}`)\n\n"
             f"#### Blueprint\n```json\n{bp_json}\n```\n\n"
             f"#### Synthesized Code\n```python\n{trace.synthesized_code}\n```\n",
         )
         return "end_turn"
 
-    async def _run_dual_pair(
-        self, session: HrmAcpSession, spec: ProblemSpec, invariant: dict[str, Any]
-    ) -> str:
+    async def _run_dual_pair(self, session: HrmAcpSession, spec: ProblemSpec) -> str:
         sid = session.session_id
         tc_id = f"tc_{uuid.uuid4().hex[:8]}"
         await self._emit_tool_start(sid, tc_id, f"Run 3-Node HRM loop on {spec.id}", kind="execute")
@@ -462,7 +462,6 @@ class HrmAgentAcpServer:
         await self._emit_message(
             sid,
             f"### HRM Dual-Pair Result ({spec.id})\n\n"
-            f"- **Latent Paradigm:** `{invariant.get('paradigm')}`\n"
             f"- **Verdict:** `{trace.final_verdict}` (Solved: `{trace.solved}`)\n"
             f"- **Macro Steps:** `{trace.macro_steps}` | **Micro Repairs:** `{trace.micro_iterations}`\n\n"
             f"```python\n{trace.final_code or ''}\n```\n",

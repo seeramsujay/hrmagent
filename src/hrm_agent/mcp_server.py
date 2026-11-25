@@ -1,6 +1,6 @@
 """Model Context Protocol (MCP) Server for hrmagent (HRM-4M).
 
-Exposes HRM latent invariant discovery, 4-Model solving, 3-node closed-loop
+Exposes HRM maze solving, supervisor/coder/verifier solving, 3-node closed-loop
 solving, sandboxed Code-Action execution, wait4 verification, and TerminalBench
 evaluation over stdio or HTTP/SSE for AGY, Claude Code, Claude Desktop, and Zed.
 """
@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import Any, Literal, Optional
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from hrm_agent.code_agent import CodeActionAgent
 from hrm_agent.four_model_agent import FourModelAgent
-from hrm_agent.hrm_latent_engine import HRMLatentSolver
 from hrm_agent.hrm_loop import HRMAgentLoop
+from hrm_agent.hrm_model import solve_maze
 from hrm_agent.llm_engine import MockLLMEngine
 from hrm_agent.schemas import ProblemSpec
 from judge.sandbox import SandboxRunner
@@ -33,20 +34,19 @@ GRAMMAR_DIR = REPO_ROOT / "grammars"
 
 
 class HrmAgentMcpApp:
-    """MCP server exposing HRM-4M reasoning, verification, and TerminalBench tools."""
+    """MCP server exposing HRM maze solving, verification, and TerminalBench tools."""
 
     def __init__(self, mode: str = "mock", device: str = "auto"):
         self.mode = mode
         self.device = device
-        self.latent_solver = HRMLatentSolver(device=device)
         self.sandbox = SandboxRunner()
 
         self.mcp = MCPServer(
             name="hrmagent",
             version="0.1.0",
             instructions=(
-                "hrmagent (HRM-4M) provides hierarchical latent reasoning, 4-model "
-                "algorithmic synthesis, sandboxed Python Code-Action execution, "
+                "hrmagent provides Sapient HRM maze solving, supervisor/coder/verifier "
+                "code synthesis, sandboxed Python Code-Action execution, "
                 "os.wait4 telemetry verification, and TerminalBench diagnostics."
             ),
         )
@@ -55,14 +55,15 @@ class HrmAgentMcpApp:
 
     def _register_tools(self) -> None:
         @self.mcp.tool()
-        def hrm_discover_invariant(problem_description: str, constraints: str = "") -> str:
-            """Discover mathematical/algorithmic invariant in latent space via Sapient-style HRM recurrence."""
+        def hrm_solve_maze(maze: str) -> str:
+            """Solve a 30x30 maze ('#' wall, ' ' free, 'S' start, 'G' goal) with Sapient's official HRM checkpoint."""
+            # Errors propagate so that MCP clients receive a tool error, not a successful result.
             try:
                 with contextlib.redirect_stdout(sys.stderr):
-                    res = self.latent_solver.discover_invariant(problem_description, constraints)
-                return json.dumps(res, indent=2)
+                    res = solve_maze(maze, device=self.device)
             except Exception as exc:
-                return json.dumps({"status": "error", "error": str(exc)}, indent=2)
+                raise ToolError(str(exc)) from exc
+            return json.dumps(res, indent=2)
 
         @self.mcp.tool()
         def hrm_solve_4m(
@@ -76,7 +77,7 @@ class HrmAgentMcpApp:
             time_limit_ms: int = 2000,
             memory_limit_mb: int = 256,
         ) -> str:
-            """Solve a problem using the 4-Model HRM pipeline (Latent -> Supervisor -> Coder -> Jev Verifier)."""
+            """Solve a coding problem: Supervisor -> Coder -> Verifier (currently uses the canned mock engine)."""
             try:
                 spec = ProblemSpec(
                     id=problem_id,
@@ -93,9 +94,7 @@ class HrmAgentMcpApp:
                 )
                 with contextlib.redirect_stdout(sys.stderr):
                     agent = FourModelAgent(
-                        hrm_solver=self.latent_solver,
                         sandbox=self.sandbox,
-                        device=self.device,
                     )
                     trace = agent.solve(spec, language=lang)
                 return json.dumps(
@@ -103,7 +102,7 @@ class HrmAgentMcpApp:
                         "problem_id": trace.problem_id,
                         "solved": trace.solved,
                         "final_verdict": trace.final_verdict,
-                        "latent_invariant": trace.latent_invariant,
+                        "engine": "mock",
                         "blueprint": trace.blueprint.model_dump() if trace.blueprint else None,
                         "synthesized_code": trace.synthesized_code,
                         "verification_telemetry": (
