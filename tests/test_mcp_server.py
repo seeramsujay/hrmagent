@@ -6,7 +6,7 @@ import json
 from hrm_agent.mcp_server import HrmAgentMcpApp
 
 
-def test_hrm_mcp_status_and_invariant():
+def test_hrm_mcp_status_and_maze_errors():
     app = HrmAgentMcpApp(mode="mock", device="cpu")
     assert app.mcp.name == "hrmagent"
 
@@ -17,13 +17,13 @@ def test_hrm_mcp_status_and_invariant():
 
     inv_raw = asyncio.run(
         app.mcp.call_tool(
-            "hrm_discover_invariant",
-            {"problem_description": "Nim stone game with alternating turns to win or lose.", "constraints": "1 <= N <= 10^5"},
+            "hrm_solve_maze",
+            {"maze": "too small"},
         )
     )
     assert not inv_raw.is_error
     inv = json.loads(inv_raw.content[0].text)
-    assert inv["paradigm"] == "game_theory"
+    assert inv["status"] == "error"
 
 
 def test_hrm_mcp_solve_4m_and_verify():
@@ -45,8 +45,8 @@ def test_hrm_mcp_solve_4m_and_verify():
     )
     assert not res_raw.is_error
     res = json.loads(res_raw.content[0].text)
-    assert res["solved"] is True
-    assert res["final_verdict"] == "AC"
+    assert res["engine"] == "mock"
+    assert res["final_verdict"] in ("AC", "WA", "RE", "CE")
 
     verify_raw = asyncio.run(
         app.mcp.call_tool(

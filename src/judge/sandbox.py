@@ -6,6 +6,7 @@ Extracts os.wait4 telemetry (ru_utime, ru_stime, ru_maxrss), wall-clock ms, and 
 CE, AC, WA, TLE, MLE, RE.
 """
 
+import json
 import os
 import resource
 import shutil
@@ -304,7 +305,7 @@ class SandboxRunner:
             "    try:\n"
             "        resource.setrlimit(resource.RLIMIT_CORE,(0,0))\n"
             "        if hasattr(resource,'RLIMIT_CPU'): resource.setrlimit(resource.RLIMIT_CPU,(cs,cs+1))\n"
-            "        if hasattr(resource,'RLIMIT_AS'): resource.setrlimit(resource.RLIMIT_AS,(mb,mb))\n"
+            "        if hasattr(resource,'RLIMIT_AS') and sys.platform!='darwin': resource.setrlimit(resource.RLIMIT_AS,(mb,mb))\n"
             "        os.execvp(cmd[0],cmd)\n"
             "    except Exception as e:\n"
             "        sys.stderr.write(f'Exec failed: {e}\\n')\n"
@@ -345,6 +346,8 @@ class SandboxRunner:
                     status = int(info.get("status", 0))
                     cpu_time_ms = (float(info.get("ru_utime", 0.0)) + float(info.get("ru_stime", 0.0))) * 1000.0
                     peak_rss_kb = int(info.get("ru_maxrss", 0))
+                    if sys.platform == "darwin":  # macOS reports bytes, Linux reports KiB
+                        peak_rss_kb //= 1024
                 except Exception:
                     status = proc.returncode or 0
         except subprocess.TimeoutExpired:

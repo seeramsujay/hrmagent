@@ -1,3 +1,9 @@
+> **Correction (2026-11-25).** HRM claims written before this date did not use Sapient's HRM. The code
+> behind them was an untrained or random-weight stand-in (in `hrmagent`, plus keyword matching and
+> hand-written solutions picked by problem name). Treat HRM results, latencies and pass rates in this
+> document as invalid. The real model is a task-specific grid solver: see `training/README.md` at the
+> monorepo root.
+
 # HRM-4M: Multi-Timescale Latent Recurrent Reasoning Meets Code-Action Multi-Agent Systems
 
 **Authors**: Seeram Sujay and Collaborators  

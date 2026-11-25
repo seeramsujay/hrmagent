@@ -563,7 +563,7 @@ def create_app(
         request: Request,
         language: Literal["python", "cpp", "typescript", "kotlin"] = "python",
     ):
-        """Execute full 4-Model Hierarchical Reasoning Architecture (HRM -> Supervisor -> Coder -> Verifier)."""
+        """Execute the Supervisor -> Coder -> Verifier pipeline with the server's engines."""
         _validate_spec_checker(spec)
         state = get_state()
         auth = request.headers.get("Authorization")
@@ -572,13 +572,16 @@ def create_app(
 
         from hrm_agent.four_model_agent import FourModelAgent
 
-        agent = FourModelAgent(sandbox=state.sandbox, device=state.device)
+        planner, coder, critic = state.get_engines()
+        agent = FourModelAgent(
+            supervisor_engine=planner, coder_engine=coder, verifier_engine=critic, sandbox=state.sandbox
+        )
         trace = agent.solve(spec, language=language)  # type: ignore
         return {
             "problem_id": trace.problem_id,
             "solved": trace.solved,
             "final_verdict": trace.final_verdict,
-            "latent_invariant": trace.latent_invariant,
+            "engine": state.mode,
             "blueprint": trace.blueprint.model_dump() if trace.blueprint else None,
             "synthesized_code": trace.synthesized_code,
             "repair_iterations": trace.repair_iterations,

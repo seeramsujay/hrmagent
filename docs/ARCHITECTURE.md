@@ -1,3 +1,9 @@
+> **Correction (2026-11-25).** HRM claims written before this date did not use Sapient's HRM. The code
+> behind them was an untrained or random-weight stand-in (in `hrmagent`, plus keyword matching and
+> hand-written solutions picked by problem name). Treat HRM results, latencies and pass rates in this
+> document as invalid. The real model is a task-specific grid solver: see `training/README.md` at the
+> monorepo root.
+
 # HRM-4M Architecture & Technical Specification
 
 The **Hierarchical Reasoning Model (HRM-4M)** is an autonomous coding agent framework engineered for resource-constrained hardware (consumer laptop GPUs with $\le 6$ GB VRAM). It overcomes the historical "intelligence ceiling" of sub-2B models by replacing discrete textual Chain-of-Thought (CoT) token generation with **continuous latent-space recurrence** and enforcing a strict **four-tier collaborative division of labor**.

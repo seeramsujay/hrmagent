@@ -71,7 +71,7 @@ def test_hrm_acp_server_modes_and_commands(tmp_path):
                     "jsonrpc": "2.0",
                     "id": 6,
                     "method": "session/prompt",
-                    "params": {"sessionId": sid, "prompt": "/invariant Nim stone pile game"},
+                    "params": {"sessionId": sid, "prompt": "/help"},
                 }
             )
             assert inv_res == {"stopReason": "end_turn"}
@@ -86,7 +86,7 @@ def test_hrm_acp_server_modes_and_commands(tmp_path):
         ]
         joined = "\n".join(chunks)
         assert "Verdict:" in joined
-        assert "game_theory" in joined
+        assert "/maze" in joined
 
     asyncio.run(_run())
 
@@ -94,8 +94,8 @@ def test_hrm_acp_server_modes_and_commands(tmp_path):
 def test_acp_llm_engine_end_to_end_stdio(tmp_path):
     hrm_bin = Path(__file__).resolve().parents[1] / "bin" / "hrmagent"
     engine = AcpLLMEngine(backend=f"{hrm_bin} acp --device cpu", cwd=str(tmp_path), timeout_sec=30.0)
-    text, telem = engine.generate("/invariant Nim stone game with alternating turns")
-    assert "game_theory" in text
+    text, telem = engine.generate("/help")
+    assert "/maze" in text
     assert telem.total_latency_ms > 0
 
 

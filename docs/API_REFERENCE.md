@@ -42,7 +42,6 @@ hrm 4m-solve [OPTIONS]
 | :--- | :--- | :--- | :--- |
 | `--problem-file` | `str` | `examples/codechef_problem_example.json` | Path to input ProblemSpec JSON file. |
 | `--language` | `str` | `python` | Target language (`python`, `cpp`, `typescript`, `kotlin`). |
-| `--device` | `str` | `auto` | Compute device for latent recurrence. |
 
 #### `hrm terminalbench`
 Executes the standardized 5-domain TerminalBench agent evaluation suite.
@@ -55,42 +54,12 @@ hrm terminalbench [OPTIONS]
 | :--- | :--- | :--- | :--- |
 | `--output-report` | `str` | `outputs/terminal_bench_report.json` | Path to write benchmark report JSON. |
 
-#### `hrm 4m-train-latent`
-Trains the HRM Latent Recurrent Reasoner on high-star open source invariants and CodeChef competitive programming challenges.
+#### `hrm solve-maze`
+Solves a 30x30 maze with Sapient's official HRM checkpoint.
 
 ```bash
-hrm 4m-train-latent [OPTIONS]
+hrm solve-maze MAZE_FILE [--device auto]
 ```
-
-| Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `--output-dir` | `str` | `outputs/checkpoints_hrm_latent` | Directory to save trained `.pt` weights. |
-| `--epochs` | `int` | `5` | Number of training epochs. |
-| `--lr` | `float` | `0.0003` | Learning rate for AdamW optimizer. |
-
-#### `hrm mine-data`
-Curates, decontaminates, and balances training splits from Hugging Face and local raw files using DuckDB.
-
-```bash
-hrm mine-data [OPTIONS]
-```
-
-| Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `--output-dir` | `str` | `data/curated` | Target folder for curated JSONL splits. |
-| `--codechef-limit`| `int` | `15` | Maximum CodeChef problems to mine. |
-
-#### `hrm train-lora`
-Fine-tunes Role 1 (Architect Planner & Critic) or Role 2 (Coder & Patcher) with bfloat16 LoRA on CUDA.
-
-```bash
-hrm train-lora [OPTIONS]
-```
-
-| Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `--role` | `str` | `coder` | Role to train (`planner`, `coder`, `architect_critic`, `dpo`). |
-| `--config` | `str` | `configs/training.yaml` | Path to training configuration YAML. |
 
 ---
 
@@ -126,11 +95,7 @@ Solves a problem spec using the 4-tier pipeline (HRM $\to$ Supervisor $\to$ Code
     "problem_id": "CC-FLOW017",
     "solved": true,
     "final_verdict": "AC",
-    "latent_invariant": {
-      "invariant": "Sweep-line interval reservation...",
-      "paradigm": "greedy",
-      "latent_steps": 12
-    },
+    "engine": "mock",
     "synthesized_code": "import sys\n...",
     "repair_iterations": 0
   }

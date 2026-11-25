@@ -1,3 +1,9 @@
+> **Correction (2026-11-25).** HRM claims written before this date did not use Sapient's HRM. The code
+> behind them was an untrained or random-weight stand-in (in `hrmagent`, plus keyword matching and
+> hand-written solutions picked by problem name). Treat HRM results, latencies and pass rates in this
+> document as invalid. The real model is a task-specific grid solver: see `training/README.md` at the
+> monorepo root.
+
 # Benchmarking & Evaluation Guide
 
 This guide describes how to run and interpret evaluations on the **HRM Agent** system, including **TerminalBench** and the **CodeChef / Codeforces Competitive Programming Benchmark**.

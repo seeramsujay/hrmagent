@@ -247,7 +247,7 @@ def get_default_terminal_bench_tasks() -> list[TerminalTask]:
                 "refactor.sh": (
                     "#!/usr/bin/env bash\n"
                     "set -euo pipefail\n"
-                    "find configs/ -name '*.yaml' -exec sed -i "
+                    "find configs/ -name '*.yaml' -exec sed -i.bak "
                     "'s|legacy_endpoint: http://old.hrm.local|modern_endpoint: https://api.hrm.internal|g' {} +\n"
                 ),
             },

@@ -6,11 +6,11 @@ Guidelines and reference for Claude (Claude Code, Claude Desktop, Cursor, and An
 
 ## 1. Project Overview
 
-`hrmagent` (HRM-4M) combines a Sapient-inspired dual-timescale latent recurrent reasoner, a System-2 supervisor planner, a Code-Action worker, and a sandboxed Jev verifier (`os.wait4` CPU & MaxRSS telemetry).
+`hrmagent` combines a supervisor planner, a code worker, and a sandboxed verifier (`os.wait4` telemetry). Sapient's real HRM (via `../PALAIS/palais_hrm`) is a maze-solving tool only: it cannot read text or write code, so never present it as part of code reasoning.
 
 ### Integration Modes:
 1. **ACP Server (`hrmagent acp`):** Stdio JSON-RPC 2.0 server (`4m`, `dual-pair`, `code-action` modes).
-2. **MCP Server (`hrmagent mcp`):** Exposes `hrm_discover_invariant`, `hrm_solve_4m`, `hrm_solve_loop`, `hrm_run_code_action`, `hrm_verify_code`, `hrm_run_terminalbench`, `hrm_get_status`.
+2. **MCP Server (`hrmagent mcp`):** Exposes `hrm_solve_maze`, `hrm_solve_4m`, `hrm_solve_loop`, `hrm_run_code_action`, `hrm_verify_code`, `hrm_run_terminalbench`, `hrm_get_status`.
 3. **ACP Client (`--acp-backend claude|agy`):** Backs HRM planner/coder/critic nodes with Claude or Antigravity over ACP.
 4. **OpenAI-Compatible HTTP Server (`hrmagent serve`):** Exposes `/v1/chat/completions`, `/v1/models`, `/solve`, `/evaluate`, `/v1/4m/solve`.
 
