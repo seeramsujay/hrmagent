@@ -9,7 +9,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from hrm_agent.mcp_server import HrmAgentMcpApp
 
 
-def test_hrm_mcp_status_and_maze_errors():
+def test_hrm_mcp_status_and_maze_errors(monkeypatch):
     app = HrmAgentMcpApp(mode="mock", device="cpu")
     assert app.mcp.name == "hrmagent"
 
@@ -18,7 +18,12 @@ def test_hrm_mcp_status_and_maze_errors():
     st = json.loads(st_raw.content[0].text)
     assert st["service"] == "hrmagent"
 
-    # A bad grid is a tool error carrying the reason (clients receive isError: true).
+    # A solver failure is a tool error carrying the reason (clients receive isError: true).
+    # Stubbed so the test does not depend on a PALAIS checkout; PALAIS tests cover grid validation.
+    def reject(maze, device="auto"):
+        raise ValueError("maze must be 30 lines of 30 characters")
+
+    monkeypatch.setattr("hrm_agent.mcp_server.solve_maze", reject)
     with pytest.raises(ToolError, match="30 lines"):
         asyncio.run(app.mcp.call_tool("hrm_solve_maze", {"maze": "too small"}))
 

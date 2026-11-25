@@ -150,5 +150,6 @@ def _strip_fences(text: str) -> str:
 
     Fences must sit on their own lines, so backticks inside source strings are left alone.
     """
-    m = re.search(r"^[ \t]*```[\w+-]*[ \t]*\n(.*?)^[ \t]*```[ \t]*$", text, re.DOTALL | re.MULTILINE)
-    return m.group(1) if m else text
+    # As in CommonMark, the closing fence may be longer than the opening one.
+    m = re.search(r"^[ \t]*(`{3,})[\w+-]*[ \t]*\n(.*?)^[ \t]*\1`*[ \t]*$", text, re.DOTALL | re.MULTILINE)
+    return m.group(2) if m else text

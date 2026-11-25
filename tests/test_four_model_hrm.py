@@ -49,3 +49,4 @@ def test_mismatched_samples_are_not_reported_as_solved(tmp_path):
 def test_python_fences_are_removed_but_inline_backticks_are_kept():
     assert _strip_fences("```python3\nprint(1)\n```") == "print(1)\n"
     assert _strip_fences('print("```x```")\n') == 'print("```x```")\n'
+    assert _strip_fences("```python\nprint(1)\n````") == "print(1)\n"

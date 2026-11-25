@@ -2,11 +2,13 @@
 
 import json
 
+import pytest
 from starlette.testclient import TestClient
 
 from hrm_agent.harness import HRMHarnessClient, load_harness_problems
 from hrm_agent.schemas import ProblemSpec
 from hrm_agent.server import create_app
+from judge.sandbox import SandboxRunner
 
 
 def test_server_health_and_models():
@@ -318,3 +320,17 @@ def test_real_engine_mode_refuses_unisolated_execution(monkeypatch):
     for path in ("/solve", "/v1/4m/solve"):
         assert client.post(path, json=spec).status_code == 503
     assert client.post("/evaluate", json={"problems": [spec]}).status_code == 503
+
+
+def test_nsjail_failure_does_not_replay_on_host(monkeypatch, tmp_path):
+    runner = SandboxRunner(engine="nsjail")
+    runner.nsjail_bin, runner.bwrap_bin = "nsjail", None
+    runner.allow_unisolated_fallback = False
+
+    def broken(*args, **kwargs):
+        raise OSError("jail failed")
+
+    monkeypatch.setattr("judge.sandbox.subprocess.Popen", broken)
+    monkeypatch.setattr(runner, "_execute_with_wait4", lambda *a, **k: pytest.fail("ran on the host"))
+    with pytest.raises(OSError):
+        runner._execute_nsjail(["true"], "", 1000, 64, tmp_path)

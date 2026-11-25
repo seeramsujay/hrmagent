@@ -115,4 +115,5 @@ def test_hrm_resolve_acp_command():
 def test_maze_prompt_keeps_trailing_free_cells():
     assert _extract_prompt_text("/maze\n# S \n") == "/maze\n# S "
     assert _extract_prompt_text([{"type": "text", "text": "/maze\n#G "}]) == "/maze\n#G "
+    assert _extract_prompt_text("/MAZE\n#G ") == "/MAZE\n#G "
     assert _extract_prompt_text("  hello  ") == "hello"

@@ -460,6 +460,10 @@ class SandboxRunner:
             "--chdir",
             str(cwd),
         ]
+        # Python solutions run with sys.executable, which may live in a virtualenv outside /usr.
+        for prefix in sorted({sys.prefix, sys.base_prefix, os.path.realpath(sys.base_prefix)}):
+            if prefix != "/usr" and not prefix.startswith("/usr/"):
+                bwrap_cmd.extend(["--ro-bind-try", prefix, prefix])
         if os.path.exists("/lib64"):
             bwrap_cmd.extend(["--ro-bind", "/lib64", "/lib64"])
         if os.path.exists("/etc"):
@@ -621,6 +625,8 @@ class SandboxRunner:
             # Fall back to bwrap or setrlimit
             if self.bwrap_bin:
                 return self._execute_bwrap(cmd, input_data, time_limit_ms, memory_limit_mb, cwd)
+            if not self.allow_unisolated_fallback:
+                raise
             return self._execute_with_wait4(cmd, input_data, time_limit_ms, memory_limit_mb, cwd)
 
     def run_code(

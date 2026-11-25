@@ -49,7 +49,7 @@ class HrmAcpSession:
 
 def _trim_prompt(text: str) -> str:
     """Strip a prompt, keeping trailing spaces of a /maze grid, where a space is a free cell."""
-    if text.lstrip().startswith("/maze"):
+    if text.lstrip().lower().startswith("/maze"):
         return text.lstrip().rstrip("\r\n")
     return text.strip()
 
