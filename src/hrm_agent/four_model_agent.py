@@ -11,7 +11,7 @@ MockLLMEngine the output is canned and says nothing about solving ability.
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 
 from pydantic import ValidationError
 
@@ -62,10 +62,17 @@ class FourModelAgent:
     ) -> FourModelTrace:
         """Plan, write code, then verify against the samples and repair."""
         trace = FourModelTrace(problem_id=spec.id, language=language)
+        if len(spec.sample_inputs) != len(spec.sample_outputs):
+            # zip() would silently skip the unmatched samples and could report AC for them.
+            trace.final_verdict = "INVALID_SAMPLES"
+            return trace
+        task = (
+            f"{spec.title} - {spec.description}\nInput format: {spec.input_format}\n"
+            f"Output format: {spec.output_format}\nConstraints: {spec.constraints}"
+        )
 
         bp_raw, _ = self.supervisor.generate(
-            f"System 2 algorithmic planner.\nProblem: {spec.title} - {spec.description}\n"
-            f"Constraints: {spec.constraints}\n"
+            f"System 2 algorithmic planner.\nProblem: {task}\n"
             "Emit a JSON blueprint with time complexity, data structures, and a step checklist.",
             max_tokens=300,
         )
@@ -75,8 +82,7 @@ class FourModelAgent:
             trace.blueprint = None
 
         code_raw, _ = self.coder.generate(
-            f"# Language: {language}\n# Problem: {spec.title} - {spec.description}\n"
-            f"# Constraints: {spec.constraints}\n# Plan: {bp_raw}\n"
+            f"# Language: {language}\n# Problem: {task}\n# Plan: {bp_raw}\n"
             "# Emit a complete executable program that reads stdin and writes stdout.",
             max_tokens=1024,
         )
@@ -88,9 +94,10 @@ class FourModelAgent:
             trace.final_verdict = "UNSUPPORTED_LANGUAGE"
             return trace
 
+        patch_error = ""
         for iter_idx in range(max_repair_iters + 1):
             telem: Optional[ExecutionTelemetry] = None
-            failed_input = ""
+            failed_input = failed_expected = ""
             for inp, expected in zip(spec.sample_inputs, spec.sample_outputs):
                 telem = self.sandbox.run_code(
                     code=code,
@@ -102,7 +109,7 @@ class FourModelAgent:
                     custom_checker=spec.checker_code,
                 )
                 if telem.verdict != "AC":
-                    failed_input = inp
+                    failed_input, failed_expected = inp, expected
                     break
 
             trace.verification_telemetry = telem
@@ -117,12 +124,19 @@ class FourModelAgent:
 
             trace.repair_iterations += 1
             patch, _ = self.verifier.generate(
-                f"The program failed with {telem.verdict}.\nInput:\n{failed_input}\n"
+                f"Task:\n{task}\nThe program failed with {telem.verdict}.\nInput:\n{failed_input}\n"
+                f"Expected output:\n{failed_expected}\n"
                 f"Stdout:\n{telem.stdout[:500]}\nStderr:\n{telem.stderr[:500]}\nProgram:\n{code}\n"
-                "Reply with one SEARCH / REPLACE block that fixes it.",
+                f"{patch_error}"
+                "Reply with one block in exactly this form:\n"
+                "<<<<<<< SEARCH\nold lines\n=======\nnew lines\n>>>>>>> REPLACE",
                 max_tokens=600,
             )
-            ok, patched, _ = apply_search_replace_patch(code, patch, language=language)
+            # The patcher calls Python "py".
+            ok, patched, meta = apply_search_replace_patch(
+                code, patch, language="py" if language == "python" else language
+            )
+            patch_error = "" if ok else f"Your previous patch was rejected: {meta.validation_error}\n"
             if ok:
                 trace.patches_applied.append(patch)
                 code = patched
@@ -132,6 +146,9 @@ class FourModelAgent:
 
 
 def _strip_fences(text: str) -> str:
-    """Return the body of the first fenced block, or the text unchanged."""
-    m = re.search(r"```[a-zA-Z+]*\n(.*?)```", text, re.DOTALL)
+    """Return the body of the first fenced block, or the text unchanged.
+
+    Fences must sit on their own lines, so backticks inside source strings are left alone.
+    """
+    m = re.search(r"^[ \t]*```[\w+-]*[ \t]*\n(.*?)^[ \t]*```[ \t]*$", text, re.DOTALL | re.MULTILINE)
     return m.group(1) if m else text

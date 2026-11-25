@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import Any, Literal, Optional
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from hrm_agent.code_agent import CodeActionAgent
 from hrm_agent.four_model_agent import FourModelAgent
-from hrm_agent.hrm_model import solve_maze
 from hrm_agent.hrm_loop import HRMAgentLoop
+from hrm_agent.hrm_model import solve_maze
 from hrm_agent.llm_engine import MockLLMEngine
 from hrm_agent.schemas import ProblemSpec
 from judge.sandbox import SandboxRunner
@@ -56,12 +57,13 @@ class HrmAgentMcpApp:
         @self.mcp.tool()
         def hrm_solve_maze(maze: str) -> str:
             """Solve a 30x30 maze ('#' wall, ' ' free, 'S' start, 'G' goal) with Sapient's official HRM checkpoint."""
+            # Errors propagate so that MCP clients receive a tool error, not a successful result.
             try:
                 with contextlib.redirect_stdout(sys.stderr):
                     res = solve_maze(maze, device=self.device)
-                return json.dumps(res, indent=2)
             except Exception as exc:
-                return json.dumps({"status": "error", "error": str(exc)}, indent=2)
+                raise ToolError(str(exc)) from exc
+            return json.dumps(res, indent=2)
 
         @self.mcp.tool()
         def hrm_solve_4m(

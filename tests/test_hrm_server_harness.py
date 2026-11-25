@@ -290,4 +290,31 @@ def test_server_four_model_solve_endpoint():
     data = resp.json()
     assert data["problem_id"] == "SERVER-4M-FLOW017"
     assert data["engine"] == "mock"
+    assert data["solved"] is True
+    assert data["final_verdict"] == "AC"
     assert data["synthesized_code"]
+
+
+def test_server_rejects_checker_code_on_every_solve_route():
+    """Caller-supplied checkers would execute on the server, including ones a blocklist would miss."""
+    client = TestClient(create_app(mode="mock"))
+    spec = {"id": "X", "title": "X", "description": "X", "checker_code": "import os\nos.popen('id')\n"}
+
+    for path in ("/solve", "/v1/solve", "/v1/4m/solve"):
+        assert client.post(path, json=spec).status_code == 400
+    for path in ("/evaluate", "/v1/evaluate"):
+        assert client.post(path, json={"problems": [spec]}).status_code == 400
+
+
+def test_real_engine_mode_refuses_unisolated_execution(monkeypatch):
+    monkeypatch.delenv("HRM_ALLOW_UNSANDBOXED", raising=False)
+    app = create_app(mode="mock")
+    client = TestClient(app)
+    client.get("/health")  # creates the server state
+    app.state.server_state.mode = "dual-pair"
+    app.state.server_state.sandbox.engine = "setrlimit"
+    spec = {"id": "X", "title": "X", "description": "X"}
+
+    for path in ("/solve", "/v1/4m/solve"):
+        assert client.post(path, json=spec).status_code == 503
+    assert client.post("/evaluate", json={"problems": [spec]}).status_code == 503

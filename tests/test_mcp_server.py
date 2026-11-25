@@ -3,6 +3,9 @@
 import asyncio
 import json
 
+import pytest
+from mcp.server.mcpserver.exceptions import ToolError
+
 from hrm_agent.mcp_server import HrmAgentMcpApp
 
 
@@ -15,15 +18,9 @@ def test_hrm_mcp_status_and_maze_errors():
     st = json.loads(st_raw.content[0].text)
     assert st["service"] == "hrmagent"
 
-    inv_raw = asyncio.run(
-        app.mcp.call_tool(
-            "hrm_solve_maze",
-            {"maze": "too small"},
-        )
-    )
-    assert not inv_raw.is_error
-    inv = json.loads(inv_raw.content[0].text)
-    assert inv["status"] == "error"
+    # A bad grid is a tool error carrying the reason (clients receive isError: true).
+    with pytest.raises(ToolError, match="30 lines"):
+        asyncio.run(app.mcp.call_tool("hrm_solve_maze", {"maze": "too small"}))
 
 
 def test_hrm_mcp_solve_4m_and_verify():
@@ -46,7 +43,8 @@ def test_hrm_mcp_solve_4m_and_verify():
     assert not res_raw.is_error
     res = json.loads(res_raw.content[0].text)
     assert res["engine"] == "mock"
-    assert res["final_verdict"] in ("AC", "WA", "RE", "CE")
+    assert res["solved"] is True
+    assert res["final_verdict"] == "AC"
 
     verify_raw = asyncio.run(
         app.mcp.call_tool(

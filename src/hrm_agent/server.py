@@ -240,14 +240,30 @@ def create_app(
         return app.state.server_state
 
     def _validate_spec_checker(spec: ProblemSpec) -> None:
-        """Reject dangerous untrusted checker code at entry boundary."""
+        """Refuse checker code from HTTP callers.
+
+        A checker is arbitrary Python that runs with the server user's privileges: the sandbox limits
+        CPU and memory but does not reliably isolate files or network, and a keyword blocklist is
+        trivially bypassed. Local callers of the Python API can still pass checkers.
+        """
         if spec.checker_code:
-            forbidden = ["os.system", "subprocess", "socket", "shutil.rmtree", "__import__('os')", "open("]
-            if any(tok in spec.checker_code for tok in forbidden):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Security violation: dangerous operations in checker_code are forbidden.",
-                )
+            raise HTTPException(status_code=400, detail="checker_code is not accepted over HTTP.")
+
+    def _require_isolation(state: ServerState, language: str) -> None:
+        """Refuse to run model-written code on the host unless it can be jailed.
+
+        Mock mode emits canned programs. With a real model the caller's problem statement shapes the
+        program, so it needs nsjail or bwrap. C++ is refused too: compilation happens outside the jail.
+        HRM_ALLOW_UNSANDBOXED=1 opts out on a machine where that risk is accepted.
+        """
+        if state.mode == "mock" or os.environ.get("HRM_ALLOW_UNSANDBOXED") == "1":
+            return
+        if state.sandbox.engine == "setrlimit" or language == "cpp":
+            raise HTTPException(
+                status_code=503,
+                detail="Isolated execution is unavailable; set HRM_ALLOW_UNSANDBOXED=1 to run anyway.",
+            )
+        state.sandbox.allow_unisolated_fallback = False
 
     @app.get("/")
     def root():
@@ -495,6 +511,8 @@ def create_app(
         if not state.verify_api_key(auth):
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid API key")
 
+        _require_isolation(state, language)
+
         planner, coder, critic = state.get_engines()
         loop = HRMAgentLoop(
             node1_planner=planner,
@@ -516,6 +534,8 @@ def create_app(
         auth = request.headers.get("Authorization")
         if not state.verify_api_key(auth):
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid API key")
+
+        _require_isolation(state, eval_req.language)
 
         for p in eval_req.problems:
             _validate_spec_checker(p)
@@ -569,6 +589,8 @@ def create_app(
         auth = request.headers.get("Authorization")
         if not state.verify_api_key(auth):
             raise HTTPException(status_code=401, detail="Unauthorized: Invalid API key")
+
+        _require_isolation(state, language)
 
         from hrm_agent.four_model_agent import FourModelAgent
 

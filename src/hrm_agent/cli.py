@@ -488,7 +488,6 @@ def cli_solve_maze(
 def cli_four_model_solve(
     problem_file: str = typer.Option(..., help="Path to JSON file containing ProblemSpec"),
     language: str = typer.Option("python", help="Target language ('python', 'cpp', 'typescript', 'kotlin')"),
-    device: str = typer.Option("auto", help="Compute device ('auto', 'cuda', 'cpu')"),
     acp_backend: Optional[str] = typer.Option(None, help="Optional ACP backend ('agy', 'claude', or cmd)"),
 ):
     """Execute the Supervisor -> Coder -> Verifier pipeline."""

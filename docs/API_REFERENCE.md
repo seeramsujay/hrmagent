@@ -32,7 +32,8 @@ hrm serve [OPTIONS]
 | `--reload` | `bool` | `False` | Enable auto-reload on code change (preserves auth environment). |
 
 #### `hrm 4m-solve`
-Executes closed-loop problem solving using the complete 4-Tier Hierarchical Reasoning Architecture.
+Runs the supervisor, coder and verifier pipeline (`4m` is a historical name). Pass `--problem-file` (required) and
+`--acp-backend` to use a real model; without it the output comes from the canned mock engine.
 
 ```bash
 hrm 4m-solve [OPTIONS]
@@ -40,7 +41,7 @@ hrm 4m-solve [OPTIONS]
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--problem-file` | `str` | `examples/codechef_problem_example.json` | Path to input ProblemSpec JSON file. |
+| `--problem-file` | `str` | required | Path to input ProblemSpec JSON file. |
 | `--language` | `str` | `python` | Target language (`python`, `cpp`, `typescript`, `kotlin`). |
 
 #### `hrm terminalbench`
@@ -61,6 +62,9 @@ Solves a 30x30 maze with Sapient's official HRM checkpoint.
 hrm solve-maze MAZE_FILE [--device auto]
 ```
 
+Needs a PALAIS checkout with the HRM repository and maze checkpoint: see
+[the README](../README.md#what-hrm-does-here-and-what-it-does-not). Set `PALAIS_ROOT` if it is not next to this repository.
+
 ---
 
 ## 2. REST API Reference
@@ -75,7 +79,9 @@ The server exposes standard OpenAPI 3.1 documentation at `/docs` (Swagger UI) an
 ### HRM Reasoning Endpoints
 
 #### `POST /v1/4m/solve`
-Solves a problem spec using the 4-tier pipeline (HRM $\to$ Supervisor $\to$ Coder $\to$ Verifier).
+Solves a problem spec with the supervisor, coder and verifier pipeline, using the server's configured engines.
+The response below is from mock mode. `checker_code` is rejected. Outside mock mode the code runs only under
+nsjail or bwrap, unless `HRM_ALLOW_UNSANDBOXED=1`; the same applies to `/solve` and `/evaluate`.
 
 - **Headers**: `Authorization: Bearer <API_KEY>` (if configured)
 - **Request Body**:

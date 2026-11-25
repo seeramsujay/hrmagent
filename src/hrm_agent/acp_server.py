@@ -23,8 +23,8 @@ from typing import Any, Optional, TextIO
 from hrm_agent.acp_client import AcpLLMEngine
 from hrm_agent.code_agent import CodeActionAgent
 from hrm_agent.four_model_agent import FourModelAgent
-from hrm_agent.hrm_model import solve_maze
 from hrm_agent.hrm_loop import HRMAgentLoop
+from hrm_agent.hrm_model import solve_maze
 from hrm_agent.llm_engine import LLMEngine, MockLLMEngine
 from hrm_agent.schemas import ProblemSpec
 from judge.sandbox import SandboxRunner
@@ -47,9 +47,16 @@ class HrmAcpSession:
     active_task: Optional[asyncio.Task[Any]] = field(default=None, repr=False)
 
 
+def _trim_prompt(text: str) -> str:
+    """Strip a prompt, keeping trailing spaces of a /maze grid, where a space is a free cell."""
+    if text.lstrip().startswith("/maze"):
+        return text.lstrip().rstrip("\r\n")
+    return text.strip()
+
+
 def _extract_prompt_text(prompt_field: Any) -> str:
     if isinstance(prompt_field, str):
-        return prompt_field.strip()
+        return _trim_prompt(prompt_field)
     if isinstance(prompt_field, list):
         parts: list[str] = []
         for block in prompt_field:
@@ -65,8 +72,8 @@ def _extract_prompt_text(prompt_field: Any) -> str:
                     parts.append(str(block["text"]))
             elif isinstance(block, str):
                 parts.append(block)
-        return "\n".join(p for p in parts if p).strip()
-    return str(prompt_field or "").strip()
+        return _trim_prompt("\n".join(p for p in parts if p))
+    return _trim_prompt(str(prompt_field or ""))
 
 
 def _parse_problem_spec(prompt_text: str) -> ProblemSpec:
@@ -212,8 +219,8 @@ class HrmAgentAcpServer:
                     "availableModes": [
                         {
                             "id": "4m",
-                            "name": "Four-Model HRM",
-                            "description": "Latent Reasoner -> Supervisor -> Code-Action Worker -> Jev Verifier",
+                            "name": "Supervisor/Coder/Verifier",
+                            "description": "Supervisor -> Code-Action Worker -> Jev Verifier",
                         },
                         {
                             "id": "dual-pair",
@@ -328,7 +335,9 @@ class HrmAgentAcpServer:
                 session.mode = arg
                 await self._emit_message(sid, f"Switched session `{sid}` mode to `{arg}`.")
             else:
-                await self._emit_message(sid, f"Current mode: `{session.mode}`. Usage: `/mode <4m|dual-pair|code-action>`.")
+                await self._emit_message(
+                    sid, f"Current mode: `{session.mode}`. Usage: `/mode <4m|dual-pair|code-action>`."
+                )
             return "end_turn"
 
         if cmd == "/status":
